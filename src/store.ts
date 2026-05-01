@@ -54,14 +54,8 @@ interface Actions {
   addTable: (t?: Partial<SeatingTable>) => void;
   updateTable: (id: string, patch: Partial<SeatingTable>) => void;
   removeTable: (id: string) => void;
-  addGuestToTable: (tableId: string, name: string) => void;
-  moveGuestBetweenTables: (
-    fromTable: string,
-    toTable: string,
-    fromIndex: number,
-    toIndex: number
-  ) => void;
-  removeGuestFromTable: (tableId: string, index: number) => void;
+  /** Move a guest to a table (or unseat with tableId=null). Keeps Guest.table in sync. */
+  setGuestTable: (guestId: string, tableId: string | null) => void;
 
   // Run of Show
   addROS: () => void;
@@ -172,7 +166,13 @@ export const useStore = create<AppState & Actions>()(
           guests: s.guests.map((g) => (g.id === id ? { ...g, ...patch } : g)),
         })),
       removeGuest: (id) =>
-        set((s) => ({ guests: s.guests.filter((g) => g.id !== id) })),
+        set((s) => ({
+          guests: s.guests.filter((g) => g.id !== id),
+          seating: s.seating.map((t) => ({
+            ...t,
+            guestIds: (t.guestIds ?? []).filter((gid) => gid !== id),
+          })),
+        })),
 
       toggleCheck: (id, value) =>
         set((s) => ({
@@ -249,42 +249,65 @@ export const useStore = create<AppState & Actions>()(
               id: 's_' + uid(),
               name: 'Table ' + s.seating.length,
               type: 'regular',
-              guests: [],
+              guestIds: [],
               capacity: 8,
               ...t,
             },
           ],
         })),
       updateTable: (id, patch) =>
-        set((s) => ({
-          seating: s.seating.map((t) => (t.id === id ? { ...t, ...patch } : t)),
-        })),
-      removeTable: (id) =>
-        set((s) => ({ seating: s.seating.filter((t) => t.id !== id) })),
-      addGuestToTable: (tableId, name) =>
-        set((s) => ({
-          seating: s.seating.map((t) =>
-            t.id === tableId ? { ...t, guests: [...t.guests, name] } : t
-          ),
-        })),
-      moveGuestBetweenTables: (fromTable, toTable, fromIndex, toIndex) =>
         set((s) => {
-          const next = s.seating.map((t) => ({ ...t, guests: [...t.guests] }));
-          const from = next.find((t) => t.id === fromTable);
-          const to = next.find((t) => t.id === toTable);
-          if (!from || !to) return {};
-          const [moved] = from.guests.splice(fromIndex, 1);
-          to.guests.splice(toIndex, 0, moved);
-          return { seating: next };
+          const newSeating = s.seating.map((t) =>
+            t.id === id ? { ...t, ...patch } : t
+          );
+          // If the table was renamed, propagate the new name to every Guest seated there
+          if (patch.name !== undefined) {
+            const updated = newSeating.find((t) => t.id === id);
+            const memberIds = new Set(updated?.guestIds ?? []);
+            return {
+              seating: newSeating,
+              guests: s.guests.map((g) =>
+                memberIds.has(g.id) ? { ...g, table: updated?.name ?? '' } : g
+              ),
+            };
+          }
+          return { seating: newSeating };
         }),
-      removeGuestFromTable: (tableId, index) =>
-        set((s) => ({
-          seating: s.seating.map((t) =>
-            t.id === tableId
-              ? { ...t, guests: t.guests.filter((_, i) => i !== index) }
-              : t
-          ),
-        })),
+      removeTable: (id) =>
+        set((s) => {
+          const tbl = s.seating.find((t) => t.id === id);
+          const orphaned = new Set(tbl?.guestIds ?? []);
+          return {
+            seating: s.seating.filter((t) => t.id !== id),
+            guests: s.guests.map((g) =>
+              orphaned.has(g.id) ? { ...g, table: '' } : g
+            ),
+          };
+        }),
+      setGuestTable: (guestId, tableId) =>
+        set((s) => {
+          // Pull the guest off any table they may already be on
+          const cleared = s.seating.map((t) => ({
+            ...t,
+            guestIds: (t.guestIds ?? []).filter((id) => id !== guestId),
+          }));
+          let tableName = '';
+          let next = cleared;
+          if (tableId) {
+            next = cleared.map((t) =>
+              t.id === tableId
+                ? { ...t, guestIds: [...t.guestIds, guestId] }
+                : t
+            );
+            tableName = next.find((t) => t.id === tableId)?.name ?? '';
+          }
+          return {
+            seating: next,
+            guests: s.guests.map((g) =>
+              g.id === guestId ? { ...g, table: tableName } : g
+            ),
+          };
+        }),
 
       addROS: () =>
         set((s) => ({
@@ -502,10 +525,30 @@ export const useStore = create<AppState & Actions>()(
     }),
     {
       name: 'wedding-dashboard-v1',
-      version: 1,
+      version: 2,
       storage: isCloudMode()
         ? createJSONStorage(() => cloudStorage)
         : createJSONStorage(() => localStorage),
+      migrate: (persisted: any, version: number) => {
+        if (!persisted) return persisted;
+        // v2: SeatingTable.guests (string[]) -> SeatingTable.guestIds (Guest.id[])
+        if (version < 2) {
+          const guestsByName = new Map<string, string>();
+          for (const g of persisted.guests ?? []) {
+            const key = (g.name ?? '').trim().toLowerCase();
+            if (key) guestsByName.set(key, g.id);
+          }
+          persisted.seating = (persisted.seating ?? []).map((t: any) => {
+            const ids: string[] = [];
+            for (const name of t.guests ?? []) {
+              const id = guestsByName.get((name ?? '').trim().toLowerCase());
+              if (id && !ids.includes(id)) ids.push(id);
+            }
+            return { ...t, guestIds: ids };
+          });
+        }
+        return persisted;
+      },
     }
   )
 );

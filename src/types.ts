@@ -62,8 +62,11 @@ export interface SeatingTable {
   id: string;
   name: string;
   type: 'sweetheart' | 'regular' | 'kings';
-  guests: string[];
+  /** IDs of Guest records seated at this table. Each guest occupies `qty` seats. */
+  guestIds: string[];
   capacity?: number;
+  /** Legacy: free-text guest names. Migrated to guestIds in v2. Do not write. */
+  guests?: string[];
 }
 
 export interface RunOfShowItem {
