@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
+import { cloudStorage, isCloudMode } from './cloudStorage';
 import type {
   AppState,
   Gift,
@@ -483,6 +484,9 @@ export const useStore = create<AppState & Actions>()(
     {
       name: 'wedding-dashboard-v1',
       version: 1,
+      storage: isCloudMode()
+        ? createJSONStorage(() => cloudStorage)
+        : createJSONStorage(() => localStorage),
     }
   )
 );

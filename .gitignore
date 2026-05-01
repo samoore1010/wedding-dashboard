@@ -8,5 +8,8 @@ dist-ssr
 *.log
 *.tsbuildinfo
 
+# Local data dir for testing the cloud-sync server
+data/
+
 # Claude Code local
 .claude/settings.local.json
