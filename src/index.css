@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Default theme — Sage Garden */
+  --c-bg: 250 249 246;
+  --c-surface: 255 255 255;
+  --c-ink: 58 53 48;
+  --c-muted: 122 117 110;
+  --c-border: 232 228 223;
+  --c-primary: 123 109 94;
+  --c-primary-soft: 168 155 140;
+  --c-accent: 201 169 110;
+  --c-accent-soft: 232 213 176;
+  --c-rose: 212 160 160;
+  --c-sage: 143 166 138;
+  --c-danger: 192 57 43;
+  --c-warning: 230 126 34;
+  --c-success: 39 174 96;
+}
+
+[data-theme='rose'] {
+  --c-bg: 252 247 245;
+  --c-surface: 255 255 255;
+  --c-ink: 60 41 47;
+  --c-muted: 128 102 110;
+  --c-border: 240 222 222;
+  --c-primary: 168 96 110;
+  --c-primary-soft: 207 156 168;
+  --c-accent: 198 134 100;
+  --c-accent-soft: 235 196 174;
+  --c-rose: 212 160 160;
+  --c-sage: 154 162 130;
+  --c-danger: 192 57 43;
+  --c-warning: 230 126 34;
+  --c-success: 39 174 96;
+}
+
+[data-theme='coastal'] {
+  --c-bg: 245 249 251;
+  --c-surface: 255 255 255;
+  --c-ink: 36 53 65;
+  --c-muted: 99 122 138;
+  --c-border: 218 229 238;
+  --c-primary: 80 121 145;
+  --c-primary-soft: 142 174 192;
+  --c-accent: 196 156 102;
+  --c-accent-soft: 226 200 162;
+  --c-rose: 200 142 152;
+  --c-sage: 138 173 169;
+  --c-danger: 192 57 43;
+  --c-warning: 230 126 34;
+  --c-success: 39 174 96;
+}
+
+[data-theme='burgundy'] {
+  --c-bg: 250 247 247;
+  --c-surface: 255 255 255;
+  --c-ink: 53 28 36;
+  --c-muted: 122 92 102;
+  --c-border: 234 224 224;
+  --c-primary: 123 36 56;
+  --c-primary-soft: 184 114 130;
+  --c-accent: 188 152 86;
+  --c-accent-soft: 228 207 168;
+  --c-rose: 196 122 138;
+  --c-sage: 138 156 130;
+  --c-danger: 192 57 43;
+  --c-warning: 230 126 34;
+  --c-success: 39 174 96;
+}
+
+[data-theme='modern'] {
+  --c-bg: 248 248 248;
+  --c-surface: 255 255 255;
+  --c-ink: 27 27 30;
+  --c-muted: 113 113 122;
+  --c-border: 229 229 234;
+  --c-primary: 32 32 36;
+  --c-primary-soft: 96 96 105;
+  --c-accent: 184 154 100;
+  --c-accent-soft: 222 205 170;
+  --c-rose: 196 144 144;
+  --c-sage: 130 148 130;
+  --c-danger: 192 57 43;
+  --c-warning: 230 126 34;
+  --c-success: 39 174 96;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: rgb(var(--c-bg));
+  color: rgb(var(--c-ink));
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Display font for headings */
+.font-display {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+}
+
+/* Inline-edit polish */
+.inline-edit {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.inline-edit:hover {
+  background: rgb(var(--c-bg));
+  border-color: rgb(var(--c-border));
+}
+.inline-edit:focus {
+  outline: none;
+  background: rgb(var(--c-surface));
+  border-color: rgb(var(--c-accent));
+  box-shadow: 0 0 0 3px rgb(var(--c-accent) / 0.18);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: rgb(var(--c-primary-soft)); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-primary)); }
+
+@media print {
+  .no-print { display: none !important; }
+  .print-block { display: block !important; }
+  body { background: white; }
+}

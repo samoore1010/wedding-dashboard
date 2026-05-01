@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Steven & Drew — Wedding Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #FAF9F6;
+  --card: #FFFFFF;
+  --primary: #7B6D5E;
+  --primary-light: #A89B8C;
+  --accent: #C9A96E;
+  --accent-light: #E8D5B0;
+  --rose: #D4A0A0;
+  --rose-light: #F0D6D6;
+  --sage: #8FA68A;
+  --sage-light: #C7D9C3;
+  --text: #3A3530;
+  --text-light: #7A756E;
+  --border: #E8E4DF;
+  --danger: #C0392B;
+  --warning: #E67E22;
+  --success: #27AE60;
+  --radius: 12px;
+  --shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+.header { background: linear-gradient(135deg, #7B6D5E 0%, #A89B8C 50%, #C9A96E 100%); color: white; padding: 32px 24px; text-align: center; position: relative; overflow: hidden; }
+.header::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 60%); }
+.header h1 { font-size: 28px; font-weight: 300; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 4px; }
+.header .date { font-size: 15px; opacity: 0.9; letter-spacing: 2px; margin-bottom: 16px; }
+.countdown { display: flex; justify-content: center; gap: 20px; margin-top: 8px; }
+.countdown-item { text-align: center; }
+.countdown-item .num { font-size: 32px; font-weight: 700; line-height: 1; }
+.countdown-item .label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.8; }
+.nav { display: flex; overflow-x: auto; background: var(--card); border-bottom: 1px solid var(--border); padding: 0 8px; position: sticky; top: 0; z-index: 100; }
+.nav button { flex-shrink: 0; padding: 12px 16px; border: none; background: none; color: var(--text-light); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; }
+.nav button:hover { color: var(--primary); }
+.nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px 16px; }
+.card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; margin-bottom: 16px; border: 1px solid var(--border); }
+.card h2 { font-size: 18px; font-weight: 600; color: var(--primary); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+@media (max-width: 768px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; }
+.stat-card .stat-num { font-size: 28px; font-weight: 700; color: var(--primary); }
+.stat-card .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-light); margin-top: 2px; }
+.stat-card.accent .stat-num { color: var(--accent); }
+.stat-card.rose .stat-num { color: var(--rose); }
+.stat-card.sage .stat-num { color: var(--sage); }
+.progress-wrap { margin-bottom: 12px; }
+.progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-light); margin-bottom: 4px; }
+.progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 10px 12px; background: #F5F3F0; color: var(--primary); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid var(--border); }
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:hover td { background: #FDFCFA; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-yes { background: #D4EDDA; color: #155724; }
+.badge-no { background: #F8D7DA; color: #721C24; }
+.badge-waiting { background: #FFF3CD; color: #856404; }
+.badge-done { background: var(--sage-light); color: #2D5A27; }
+.badge-pending { background: var(--accent-light); color: #7A6520; }
+.phase-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: white; border-radius: 8px; cursor: pointer; margin-bottom: 8px; }
+.phase-header h3 { color: white; margin: 0; font-size: 14px; }
+.phase-header .phase-count { font-size: 12px; opacity: 0.8; }
+.check-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+.check-item:hover { background: #F5F3F0; }
+.check-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--sage); cursor: pointer; flex-shrink: 0; }
+.check-item label { cursor: pointer; font-size: 13px; flex: 1; }
+.check-item.checked label { text-decoration: line-through; color: var(--text-light); }
+input[type="text"], input[type="number"], input[type="date"], input[type="url"], input[type="tel"], input[type="email"], select, textarea {
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; width: 100%; background: white;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(201,169,110,0.15); }
+.btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: #B8943F; }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+.btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
+.btn-outline:hover { border-color: var(--primary); }
+.btn-danger { background: none; border: 1px solid var(--danger); color: var(--danger); }
+.btn-danger:hover { background: var(--danger); color: white; }
+.seating-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.table-card { border: 2px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; transition: all 0.2s; }
+.table-card.sweetheart { border-color: var(--accent); background: linear-gradient(135deg, #FDF6E9, #FFF9F0); }
+.table-card .table-name { font-weight: 700; font-size: 13px; color: var(--primary); margin-bottom: 8px; }
+.table-card .table-guests { font-size: 12px; color: var(--text-light); }
+.table-card .guest-name { padding: 3px 0; font-size: 12px; }
+.timeline { position: relative; padding-left: 28px; }
+.timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+.timeline-item { position: relative; margin-bottom: 16px; padding: 8px 12px; border-radius: 8px; transition: background 0.15s; }
+.timeline-item:hover { background: #F5F3F0; }
+.timeline-item::before { content: ''; position: absolute; left: -24px; top: 14px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid white; box-shadow: 0 0 0 2px var(--accent); }
+.timeline-item .time { font-size: 12px; font-weight: 700; color: var(--accent); }
+.timeline-item .event { font-size: 13px; color: var(--text); }
+.timeline-item .detail { font-size: 11px; color: var(--text-light); }
+.sub-tabs { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
+.sub-tab { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: none; font-size: 12px; cursor: pointer; transition: all 0.2s; color: var(--text-light); }
+.sub-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+.registry-cat { margin-bottom: 12px; }
+.registry-cat-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #F5F3F0; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.registry-items { padding: 4px 12px; }
+.registry-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #F0EDE8; font-size: 13px; }
+.registry-item:last-child { border: none; }
+.registry-item input[type="checkbox"] { accent-color: var(--sage); }
+.itinerary-day { display: flex; align-items: flex-start; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.itinerary-day:last-child { border: none; }
+.day-num { width: 48px; height: 48px; background: linear-gradient(135deg, var(--accent), var(--accent-light)); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; font-size: 16px; flex-shrink: 0; }
+.day-info { flex: 1; }
+.day-info h4 { font-size: 14px; margin-bottom: 2px; }
+.day-info p { font-size: 12px; color: var(--text-light); }
+.inline-edit { border: none; background: transparent; font: inherit; color: inherit; padding: 2px 4px; border-radius: 4px; }
+.inline-edit:hover { background: var(--accent-light); }
+.inline-edit:focus { background: white; border: 1px solid var(--accent); box-shadow: 0 0 0 3px rgba(201,169,110,0.15); outline: none; }
+.venue-card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: box-shadow 0.2s; }
+.venue-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+.venue-card.favorite { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
+.venue-header { padding: 16px 20px; background: linear-gradient(135deg, #F5F3F0, #FDFCFA); display: flex; justify-content: space-between; align-items: flex-start; }
+.venue-body { padding: 16px 20px; }
+.venue-field { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #F0EDE8; font-size: 13px; }
+.venue-field:last-child { border: none; }
+.venue-field .vf-label { color: var(--text-light); font-weight: 500; min-width: 110px; }
+.venue-field .vf-value { text-align: right; flex: 1; }
+.venue-pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.venue-pros-cons > div { padding: 10px; border-radius: 8px; font-size: 12px; }
+.venue-pros { background: #EDF7ED; }
+.venue-cons { background: #FDF0EE; }
+.star-btn { background: none; border: none; font-size: 20px; cursor: pointer; padding: 0; line-height: 1; }
+.del-x { cursor: pointer; color: var(--danger); font-weight: 700; padding: 0 4px; opacity: 0.5; }
+.del-x:hover { opacity: 1; }
+.empty-state { text-align: center; padding: 40px 20px; color: var(--text-light); }
+.empty-state .emoji { font-size: 40px; margin-bottom: 8px; }
+.add-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; margin-top: 4px; }
+.add-row input { flex: 1; }
+@media print { .nav, .btn, .del-x { display: none !important; } .section { display: block !important; page-break-inside: avoid; } }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: var(--primary-light); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Steven & Drew</h1>
+  <div class="date">March 12, 2026 &nbsp;&bull;&nbsp; Thursday</div>
+  <div class="countdown" id="countdown"></div>
+</div>
+
+<nav class="nav" id="nav"></nav>
+<div class="container" id="app"></div>
+
+<script>
+// ─── State ───
+const KEY = 'sd-wedding-v4';
+function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } }
+function save() { localStorage.setItem(KEY, JSON.stringify(S)); }
+let S = load();
+
+const WEDDING_DATE = new Date('2026-03-12T16:00:00');
+const COLORS = ['#D4A0A0','#7B6D5E','#C9A96E','#8FA68A','#6B8E9B','#A0856D','#B5838D','#9B8FB4','#7EA8A0','#C4956A','#D4B5A0','#A89B8C','#8B9DAF','#B8B0A0','#C78283','#6A9B8E','#AB8FC4','#9BAF8B','#AF9B6B','#8AAFB5'];
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function fmt$(n) { return '$' + Number(n||0).toLocaleString(); }
+function pct(n, d) { return d ? Math.round(n / d * 100) : 0; }
+function uid() { return Date.now() + Math.random().toString(36).slice(2,7); }
+
+// ─── Default data ───
+const DEF_BUDGET_CATS = [
+  { id:'bc1', name:'Paper & Signage', pct:3 }, { id:'bc2', name:'Venue & Ceremony', pct:15 },
+  { id:'bc3', name:'Food / Service', pct:18 }, { id:'bc4', name:'Beverage', pct:10 },
+  { id:'bc5', name:'Photos', pct:10 }, { id:'bc6', name:'Music / Entertainment', pct:8 },
+  { id:'bc7', name:'Florals / Decor', pct:8 }, { id:'bc8', name:'Rentals', pct:8 },
+  { id:'bc9', name:'Lodging / Transport', pct:4 }, { id:'bc10', name:'Vendors', pct:4 },
+  { id:'bc11', name:'Favors', pct:1 }, { id:'bc12', name:'Attire', pct:6 },
+  { id:'bc13', name:'Odds & Ends', pct:2 }, { id:'bc14', name:'Accidentals', pct:3 },
+];
+
+const DEF_CHECKLIST = {
+  '12 Months Out': [
+    'Choose Wedding Motto / Theme','Plan Engagement Party','Establish Overall Budget',
+    'First Pass at Guest List','Choose Time of Year','Choose Wedding Date',
+    'Choose & Book Venue','Choose & Book Caterer','Book Photographer',
+    'Book DJ / Band','Book Videographer','Research Florists',
+    'Research Wedding Planners','Start Registry Research'
+  ],
+  '9 Months Out': [
+    'Buy Wedding Dress','Schedule Dress Alterations','Design & Send Save the Dates',
+    'Book Officiant','Schedule Hair & Makeup Trials','Create Gift Registry',
+    'Book Hotel Room Block','Research Wedding Insurance','Choose Wedding Party Attire',
+    'Plan Rehearsal Dinner Venue'
+  ],
+  '6 Months Out': [
+    'Schedule Quality Time Together','Finalize Decor & Lighting Plans',
+    'Begin Premarital Counseling','Discuss Prenup if Applicable',
+    'Make DIY Decor Plan','Book Dance Lessons',
+    'Suit / Tux Try-On & Order','Final Tasting with Caterer',
+    'Order Wedding Cake','Book Transportation',
+    'Plan Honeymoon & Book Flights','Apply for Passports if Needed'
+  ],
+  '3 Months Out': [
+    'Plan Food Options / Menu','Plan Guest Takeaways / Favors',
+    'Begin Drafting Vows','Select Ceremony Readings',
+    'Get Crafty — DIY Projects','Confirm All Vendor Lists',
+    'Send Wedding Invitations','Order Wedding Programs',
+    'Finalize Ceremony Music','Finalize Reception Playlist',
+    'Plan Bachelorette / Bachelor Party','Get Marriage License'
+  ],
+  'Month Of': [
+    'Pay All Vendors in Full','Create Seating Chart',
+    'Order & Write Escort Cards','Final Venue Walkthrough',
+    'Break in Wedding Shoes','Chase Outstanding RSVPs',
+    'Confirm All Vendor Timelines','Prepare Day-Of Emergency Kit',
+    'Write Thank You Speech Notes','Final Dress Fitting',
+    'Confirm Honeymoon Reservations','Arrange Pet / House Sitter'
+  ],
+  'Week Of & Night Before': [
+    'Nail Appointment','Final Dress / Suit Fitting',
+    'Pack Car with Decor & Supplies','Practice Vows Aloud',
+    'Write Love Notes to Each Other','Watch a Silly Movie Together',
+    'Lay Out Outfit for Tomorrow','Charge All Devices',
+    'Confirm Arrival Times with Vendors','Rehearsal & Rehearsal Dinner',
+    'Get a Good Night\'s Sleep','Enjoy the Moment'
+  ]
+};
+
+const DEF_ROS = [
+  { id:'r1', time:'2:00 PM', event:'Guest Arrival & Pre-Ceremony Cocktails', detail:'Guests mingle, find seats' },
+  { id:'r2', time:'3:00 PM', event:'Wedding Party & Family Arrival', detail:'Final photos before ceremony' },
+  { id:'r3', time:'3:45 PM', event:'Guests Seated', detail:'Ushers guide guests' },
+  { id:'r4', time:'4:00 PM', event:'Processional & Ceremony', detail:'The main event' },
+  { id:'r5', time:'4:30 PM', event:'Ceremony Concludes — Recessional', detail:'Newlyweds exit!' },
+  { id:'r6', time:'4:45 PM', event:'Cocktail Hour Begins', detail:'Drinks, appetizers, lawn games' },
+  { id:'r7', time:'5:00 PM', event:'Couple Photos (Golden Hour)', detail:'Photographer captures magic' },
+  { id:'r8', time:'5:45 PM', event:'Reception Doors Open', detail:'Guests find their tables' },
+  { id:'r9', time:'6:00 PM', event:'Grand Entrance & First Dance', detail:'Steven & Drew take the floor' },
+  { id:'r10', time:'6:15 PM', event:'Welcome Toast & Dinner Served', detail:'Best Man / Maid of Honor toasts' },
+  { id:'r11', time:'7:15 PM', event:'Parent Dances', detail:'Father-Daughter, Mother-Son' },
+  { id:'r12', time:'7:30 PM', event:'Cake Cutting', detail:'Sweet moment together' },
+  { id:'r13', time:'7:45 PM', event:'Open Dance Floor — Party!', detail:'DJ/Band kicks it up' },
+  { id:'r14', time:'9:30 PM', event:'Bouquet Toss', detail:'Who\'s next?' },
+  { id:'r15', time:'10:00 PM', event:'Last Call & Final Song', detail:'One more dance' },
+  { id:'r16', time:'10:15 PM', event:'Sparkler Send-Off / Exit', detail:'Farewell to the newlyweds' },
+  { id:'r17', time:'10:30 PM', event:'After Party', detail:'For those who aren\'t done celebrating' },
+];
+
+const DEF_WEEKEND = [
+  { id:'w1', day:'Friday', event:'Hotel Check-in', time:'3:00 PM', notes:'Guest arrivals begin' },
+  { id:'w2', day:'Friday', event:'Rehearsal', time:'5:00 PM', notes:'Wedding party only' },
+  { id:'w3', day:'Friday', event:'Rehearsal Dinner', time:'7:00 PM', notes:'Wedding party + close family' },
+  { id:'w4', day:'Saturday', event:'Wedding Day!', time:'See Run of Show', notes:'The big day' },
+  { id:'w5', day:'Sunday', event:'Farewell Brunch', time:'10:00 AM', notes:'All guests welcome' },
+  { id:'w6', day:'Sunday', event:'Hotel Check-out', time:'11:00 AM', notes:'' },
+];
+
+const DEF_VENDORS = [
+  { id:'v1', type:'Planner', name:'', contact:'', phone:'', email:'', stage:'Not Started', cost:'', notes:'' },
+  { id:'v2', type:'Venue', name:'', contact:'', phone:'', email:'', stage:'Not Started', cost:'', notes:'' },
+  { id:'v3', type:'Caterer', name:'', contact:'', phone:'', email:'', stage:'Not Started', cost:'', notes:'' },
+  { id:'v4', type:'Photographer', name:'', contact:'', phone:'', email:'', stage:'Not Started', cost:'', notes:'' },
+  { id:'v5', type:'Videographer', name:'', contact:'', phone:'', email:'', stage:'Not Started', cost:'', notes:'' },
+  { id:'v6', type:'Florist', name:'', contact:'', phone:'', email:'', stage:'Not Started', cost:'', notes:'' },
+  { id:'v7', type:'DJ / Band', name:'', contact:'', phone:'', email:'', stage:'Not Started', cost:'', notes:'' },
+  { id:'v8', type:'Hair & Makeup', name:'', contact:'', phone:'', email:'', stage:'Not Started', cost:'', notes:'' },
+  { id:'v9', type:'Officiant', name:'', contact:'', phone:'', email:'', stage:'Not Started', cost:'', notes:'' },
+  { id:'v10', type:'Baker / Cake', name:'', contact:'', phone:'', email:'', stage:'Not Started', cost:'', notes:'' },
+  { id:'v11', type:'Transportation', name:'', contact:'', phone:'', email:'', stage:'Not Started', cost:'', notes:'' },
+  { id:'v12', type:'Rentals', name:'', contact:'', phone:'', email:'', stage:'Not Started', cost:'', notes:'' },
+];
+
+const DEF_SEATING = [
+  { id:'s0', name:'Sweetheart Table', type:'sweetheart', guests:['Steven (Groom)','Drew (Bride)'] },
+  { id:'s1', name:'Table 1', type:'regular', guests:[] },
+  { id:'s2', name:'Table 2', type:'regular', guests:[] },
+  { id:'s3', name:'Table 3', type:'regular', guests:[] },
+  { id:'s4', name:'Table 4', type:'regular', guests:[] },
+  { id:'s5', name:'Table 5', type:'regular', guests:[] },
+  { id:'s6', name:'Table 6', type:'regular', guests:[] },
+  { id:'s7', name:'Kings Table 1', type:'regular', guests:[] },
+  { id:'s8', name:'Kings Table 2', type:'regular', guests:[] },
+];
+
+const DEF_REGISTRY = {
+  'Kitchen Accessories':['Cooking Utensils Set','Mandoline Slicer','Kitchen Scale','Measuring Cups & Spoons','Strainer Set','Ice Cream Scoop','Kitchen Shears','Garlic Press','Can Opener','Microplane','Box Grater','Sheet Trays','Culinary Torch','Spice Jar Set','Working Glasses','Bar Tool Set','Teapot','Citrus Reamer','Coffee Scoop','French Press','Dish Towels'],
+  'Kitchen Appliances':['Immersion Blender','Juicer','KitchenAid Stand Mixer','Waffle Maker','Microwave','Espresso Machine','Toaster','Coffee Maker','Food Processor','Electric Kettle'],
+  'Bakeware':['Pie Dish','Loaf Pan','Bakeware Set','Silpat Baking Mat'],
+  'Cookware':['Mixing Bowl Set','Cutting Board Set','Pots & Pans Set','Stock Pot','Non-Stick Pan','Glass Nesting Bowls','Baking Sheets','Square Griddle','Dutch Oven','Pyrex Set','Wok','Magnetic Trivet','Knife Set'],
+  'Dinnerware':['Casual Everyday Plates','Stoneware Set','Soup & Salad Bowls'],
+  'Glassware':['Coffee Mugs','Espresso Cups','Pint Glasses','Champagne Flutes','Highball Glasses','Old Fashioned Glasses','Red Wine Glasses','Stemless Wine Glasses','Martini Glasses'],
+  'Serveware':['Salad Bowl','Ramekin Set','Cake Stand','Glass Meal Prep Set','Pitcher','Serving Platters','Linen Napkins','Napkin Holders','Cake Cutter Set','Holiday China'],
+  'Storage':['Dry Storage Containers','Glassware Storage','Bowls with Lids','Knife Storage Block','Coffee Storage Canister'],
+  'Home Decor':['Vase Collection','Candlestick Set','Art Pieces','Lamps','Decorative Cutting Board','Throw Blankets','Coffee Table Books'],
+  'Home Fun':['Board Games','Hammock','Yeti Cooler','Camping Chairs'],
+  'Furniture':['Dining Room Chairs','Bar Cart','Dining Cabinet / Sideboard'],
+  'Bedroom':['Pillow Set','Comforter / Duvet','Sheet Set','Bedframe','Closet Organization','Hatch Alarm Clock'],
+  'Bathroom':['Towel Sets','Matching Robes','Bathroom Accessories Set'],
+  'Experience Gifts':['Airbnb Gift Card','Honeyfund','Framebridge','Charitable Donation','Blue Apron','Ruggable Gift Card'],
+};
+
+const DEF_HONEYMOON_DAYS = [
+  { id:'h1', day:1, title:'Departure Day', desc:'Fly out — adventure begins!' },
+  { id:'h2', day:2, title:'Arrival & Settle In', desc:'Check into hotel, explore the area' },
+  { id:'h3', day:3, title:'Day 3', desc:'Plan your activities' },
+  { id:'h4', day:4, title:'Day 4', desc:'Plan your activities' },
+  { id:'h5', day:5, title:'Day 5', desc:'Plan your activities' },
+  { id:'h6', day:6, title:'Travel Home', desc:'Head back as newlyweds!' },
+];
+
+// ─── Init defaults ───
+if (!S.budgetTotal) S.budgetTotal = 35000;
+if (!S.budgetCats) S.budgetCats = DEF_BUDGET_CATS;
+if (!S.budgetSpent) S.budgetSpent = {};
+if (!S.guests) S.guests = [{ id:'g1', name:'', group:'Couple Friends', side:'Both', status:'Waiting', qty:1, meal:'', table:'', notes:'' }];
+if (!S.checklist) S.checklist = {};
+if (!S.checklistItems) { S.checklistItems = {}; Object.entries(DEF_CHECKLIST).forEach(([phase, items]) => { S.checklistItems[phase] = items.map((t,i) => ({id:phase+'_'+i, text:t})); }); }
+if (!S.vendors) S.vendors = DEF_VENDORS;
+if (!S.seating) S.seating = DEF_SEATING;
+if (!S.runOfShow) S.runOfShow = DEF_ROS;
+if (!S.weekend) S.weekend = DEF_WEEKEND;
+if (!S.registryCats) { S.registryCats = {}; Object.entries(DEF_REGISTRY).forEach(([cat, items]) => { S.registryCats[cat] = items.map(t => ({id:uid(), text:t})); }); }
+if (!S.registryChecked) S.registryChecked = {};
+if (!S.giftTracker) S.giftTracker = [];
+if (!S.venues) S.venues = [];
+if (!S.honeymoonDays) S.honeymoonDays = DEF_HONEYMOON_DAYS;
+if (!S.notes) S.notes = '';
+if (!S.honeymoonNotes) S.honeymoonNotes = '';
+if (!S.packingList) S.packingList = '';
+save();
+
+// ─── Tabs ───
+const TABS = [
+  { id:'overview', label:'Overview' }, { id:'budget', label:'Budget' },
+  { id:'guests', label:'Guests' }, { id:'venues', label:'Venues' },
+  { id:'checklist', label:'Checklist' }, { id:'vendors', label:'Vendors' },
+  { id:'seating', label:'Seating' }, { id:'timeline', label:'Day-Of' },
+  { id:'registry', label:'Registry' }, { id:'gifts', label:'Gifts' },
+  { id:'honeymoon', label:'Honeymoon' },
+];
+let activeTab = 'overview';
+let _guestFilter = 'All';
+
+function renderNav() {
+  document.getElementById('nav').innerHTML = TABS.map(t =>
+    `<button class="${t.id===activeTab?'active':''}" onclick="switchTab('${t.id}')">${t.label}</button>`
+  ).join('');
+}
+function switchTab(id) { activeTab = id; renderNav(); render(); }
+
+// ─── Countdown ───
+function renderCountdown() {
+  const diff = WEDDING_DATE - new Date();
+  if (diff <= 0) { document.getElementById('countdown').innerHTML = '<div style="font-size:20px;font-weight:600;">Just Married!</div>'; return; }
+  const d = Math.floor(diff/864e5), h = Math.floor((diff%864e5)/36e5), m = Math.floor((diff%36e5)/6e4);
+  document.getElementById('countdown').innerHTML = `
+    <div class="countdown-item"><div class="num">${d}</div><div class="label">Days</div></div>
+    <div class="countdown-item"><div class="num">${h}</div><div class="label">Hours</div></div>
+    <div class="countdown-item"><div class="num">${m}</div><div class="label">Minutes</div></div>`;
+}
+setInterval(renderCountdown, 60000); renderCountdown();
+
+// ─── Helpers ───
+function guestStats() {
+  const g = S.guests;
+  return {
+    total: g.reduce((s,x) => s+(Number(x.qty)||1), 0),
+    yes: g.filter(x=>x.status==='Yes').reduce((s,x) => s+(Number(x.qty)||1), 0),
+    no: g.filter(x=>x.status==='No').reduce((s,x) => s+(Number(x.qty)||1), 0),
+    waiting: g.filter(x=>x.status==='Waiting').reduce((s,x) => s+(Number(x.qty)||1), 0),
+  };
+}
+function checkStats() {
+  let total=0, checked=0;
+  Object.values(S.checklistItems).forEach(items => items.forEach(it => { total++; if(S.checklist[it.id]) checked++; }));
+  return {total, checked};
+}
+function totalSpent() { return Object.values(S.budgetSpent).reduce((s,v) => s+(Number(v)||0), 0); }
+
+// ─── Render router ───
+function render() {
+  const R = { overview:rOverview, budget:rBudget, guests:rGuests, venues:rVenues, checklist:rChecklist, vendors:rVendors, seating:rSeating, timeline:rTimeline, registry:rRegistry, gifts:rGifts, honeymoon:rHoneymoon };
+  document.getElementById('app').innerHTML = R[activeTab]();
+  if (activeTab==='overview'||activeTab==='budget') setTimeout(renderCharts, 50);
+}
+
+// ─── OVERVIEW ───
+function rOverview() {
+  const gs=guestStats(), ck=checkStats(), sp=totalSpent(), bk=S.vendors.filter(v=>v.stage==='Booked').length;
+  return `
+  <div class="grid-4">
+    <div class="stat-card"><div class="stat-num">${fmt$(S.budgetTotal)}</div><div class="stat-label">Total Budget</div></div>
+    <div class="stat-card accent"><div class="stat-num">${fmt$(sp)}</div><div class="stat-label">Spent So Far</div></div>
+    <div class="stat-card rose"><div class="stat-num">${gs.yes} / ${gs.total}</div><div class="stat-label">RSVPs Confirmed</div></div>
+    <div class="stat-card sage"><div class="stat-num">${pct(ck.checked,ck.total)}%</div><div class="stat-label">Tasks Done</div></div>
+  </div>
+  <div class="grid-2" style="margin-top:16px">
+    <div class="card">
+      <h2>Budget Overview</h2>
+      <div style="position:relative;height:220px"><canvas id="budgetChart"></canvas></div>
+      <div class="progress-wrap" style="margin-top:12px">
+        <div class="progress-label"><span>Spent</span><span>${fmt$(sp)} of ${fmt$(S.budgetTotal)}</span></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct(sp,S.budgetTotal)}%;background:var(--accent)"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Guest Breakdown</h2>
+      <div style="position:relative;height:220px"><canvas id="guestChart"></canvas></div>
+      <div style="display:flex;justify-content:space-around;margin-top:12px;font-size:13px">
+        <div><span style="color:var(--sage);font-weight:700">${gs.yes}</span> Confirmed</div>
+        <div><span style="color:var(--warning);font-weight:700">${gs.waiting}</span> Waiting</div>
+        <div><span style="color:var(--danger);font-weight:700">${gs.no}</span> Declined</div>
+      </div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h2>Planning Progress</h2>
+      ${Object.entries(S.checklistItems).map(([phase, items]) => {
+        const done = items.filter(it => S.checklist[it.id]).length, p = pct(done, items.length);
+        return `<div class="progress-wrap"><div class="progress-label"><span>${phase}</span><span>${done}/${items.length}</span></div><div class="progress-bar"><div class="progress-fill" style="width:${p}%;background:${p===100?'var(--sage)':'var(--primary)'}"></div></div></div>`;
+      }).join('')}
+    </div>
+    <div class="card">
+      <h2>Vendor Status</h2>
+      ${S.vendors.map(v => `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><div><span style="font-size:13px;font-weight:600">${esc(v.type)}</span>${v.name?` <span style="font-size:12px;color:var(--text-light)">— ${esc(v.name)}</span>`:''}</div><span class="badge ${v.stage==='Booked'?'badge-yes':v.stage==='Inquiry Sent'||v.stage==='Meeting Scheduled'?'badge-waiting':'badge-pending'}">${v.stage}</span></div>`).join('')}
+    </div>
+  </div>
+  <div class="card"><h2>Quick Notes</h2><textarea rows="4" placeholder="Jot down thoughts, ideas, reminders..." onchange="S.notes=this.value;save()">${esc(S.notes)}</textarea></div>`;
+}
+
+// ─── BUDGET ───
+function rBudget() {
+  const sp = totalSpent(), rem = S.budgetTotal - sp;
+  return `
+  <div class="card">
+    <h2>Wedding Budget</h2>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+      <label style="font-size:13px;font-weight:600">Total Budget: $</label>
+      <input type="number" value="${S.budgetTotal}" style="width:130px" onchange="S.budgetTotal=Number(this.value)||0;save();render()">
+    </div>
+    <div class="grid-3" style="margin-bottom:20px">
+      <div class="stat-card"><div class="stat-num">${fmt$(S.budgetTotal)}</div><div class="stat-label">Total Budget</div></div>
+      <div class="stat-card accent"><div class="stat-num">${fmt$(sp)}</div><div class="stat-label">Total Spent</div></div>
+      <div class="stat-card ${rem>=0?'sage':''}"><div class="stat-num" ${rem<0?'style="color:var(--danger)"':''}>${fmt$(rem)}</div><div class="stat-label">${rem>=0?'Remaining':'Over Budget'}</div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-label"><span>Budget Used</span><span>${pct(sp,S.budgetTotal)}%</span></div><div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,pct(sp,S.budgetTotal))}%;background:${rem<0?'var(--danger)':'var(--accent)'}"></div></div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card"><h2>Allocation</h2><div style="position:relative;height:280px"><canvas id="budgetChart"></canvas></div></div>
+    <div class="card"><h2>Spent vs Allocated</h2><div style="position:relative;height:280px"><canvas id="spendChart"></canvas></div></div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">Budget Breakdown</h2>
+      <button class="btn btn-primary" onclick="addBudgetCat()">+ Add Category</button>
+    </div>
+    <table>
+      <tr><th>Category</th><th style="width:70px;text-align:center">%</th><th style="text-align:right">Allocated</th><th style="text-align:right;width:120px">Spent</th><th style="text-align:right">Remaining</th><th style="width:40px"></th></tr>
+      ${S.budgetCats.map((c,i) => {
+        const alloc = Math.round(S.budgetTotal * (Number(c.pct)||0) / 100);
+        const spent = Number(S.budgetSpent[c.id]) || 0;
+        const r = alloc - spent;
+        return `<tr>
+          <td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${COLORS[i%COLORS.length]};margin-right:8px;vertical-align:middle"></span><input type="text" value="${esc(c.name)}" class="inline-edit" style="width:160px" onchange="S.budgetCats[${i}].name=this.value;save()"></td>
+          <td style="text-align:center"><input type="number" value="${c.pct}" class="inline-edit" style="width:50px;text-align:center" onchange="S.budgetCats[${i}].pct=Number(this.value);save();render()">%</td>
+          <td style="text-align:right;font-weight:600">${fmt$(alloc)}</td>
+          <td style="text-align:right"><input type="number" value="${spent||''}" placeholder="0" style="width:100px;text-align:right" onchange="S.budgetSpent['${c.id}']=Number(this.value);save();render()"></td>
+          <td style="text-align:right;color:${r<0?'var(--danger)':'var(--sage)'}; font-weight:600">${fmt$(r)}</td>
+          <td><span class="del-x" onclick="S.budgetCats.splice(${i},1);save();render()">✕</span></td>
+        </tr>`;
+      }).join('')}
+      <tr style="font-weight:700;border-top:2px solid var(--primary)">
+        <td>Total</td>
+        <td style="text-align:center">${S.budgetCats.reduce((s,c)=>s+(Number(c.pct)||0),0)}%</td>
+        <td style="text-align:right">${fmt$(S.budgetTotal)}</td>
+        <td style="text-align:right">${fmt$(sp)}</td>
+        <td style="text-align:right;color:${rem<0?'var(--danger)':'var(--sage)'}">${fmt$(rem)}</td>
+        <td></td>
+      </tr>
+    </table>
+  </div>`;
+}
+function addBudgetCat() { S.budgetCats.push({id:'bc_'+uid(), name:'New Category', pct:0}); save(); render(); }
+
+// ─── GUESTS ───
+function rGuests() {
+  const gs = guestStats();
+  let filtered = S.guests;
+  if (_guestFilter!=='All') filtered = filtered.filter(g => g.status===_guestFilter);
+  return `
+  <div class="grid-4">
+    <div class="stat-card"><div class="stat-num">${gs.total}</div><div class="stat-label">Total Invited</div></div>
+    <div class="stat-card sage"><div class="stat-num">${gs.yes}</div><div class="stat-label">Confirmed</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--warning)">${gs.waiting}</div><div class="stat-label">Awaiting RSVP</div></div>
+    <div class="stat-card rose"><div class="stat-num">${gs.no}</div><div class="stat-label">Declined</div></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <h2 style="margin:0">Guest List</h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="sub-tabs">${['All','Yes','Waiting','No'].map(f => `<button class="sub-tab ${_guestFilter===f?'active':''}" onclick="_guestFilter='${f}';render()">${f}</button>`).join('')}</div>
+        <button class="btn btn-primary" onclick="addGuest()">+ Add Guest</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto"><table>
+      <tr><th>Guest Name</th><th>Group</th><th>Side</th><th style="text-align:center">Party Size</th><th>RSVP</th><th>Meal</th><th>Table</th><th>Notes</th><th></th></tr>
+      ${filtered.map((g,i) => {
+        const gi = S.guests.indexOf(g);
+        return `<tr>
+          <td><input type="text" value="${esc(g.name)}" class="inline-edit" style="min-width:140px;font-weight:500" onchange="S.guests[${gi}].name=this.value;save()"></td>
+          <td><select class="inline-edit" onchange="S.guests[${gi}].group=this.value;save()">${['Couple Friends','Bride Family','Groom Family','Bride Friends','Groom Friends','Work','Other'].map(o=>`<option ${g.group===o?'selected':''}>${o}</option>`).join('')}</select></td>
+          <td><select class="inline-edit" onchange="S.guests[${gi}].side=this.value;save()">${['Both','Bride','Groom'].map(o=>`<option ${g.side===o?'selected':''}>${o}</option>`).join('')}</select></td>
+          <td style="text-align:center"><input type="number" value="${g.qty||1}" min="1" max="20" class="inline-edit" style="width:50px;text-align:center" onchange="S.guests[${gi}].qty=Number(this.value);save();render()"></td>
+          <td><select class="inline-edit" style="font-weight:600;color:${g.status==='Yes'?'var(--success)':g.status==='No'?'var(--danger)':'var(--warning)'}" onchange="S.guests[${gi}].status=this.value;save();render()">${['Waiting','Yes','No'].map(o=>`<option ${g.status===o?'selected':''}>${o}</option>`).join('')}</select></td>
+          <td><select class="inline-edit" onchange="S.guests[${gi}].meal=this.value;save()"><option value="">—</option>${['Chicken','Beef','Fish','Vegetarian','Vegan','Kids'].map(o=>`<option ${g.meal===o?'selected':''}>${o}</option>`).join('')}</select></td>
+          <td><input type="text" value="${esc(g.table||'')}" placeholder="—" class="inline-edit" style="width:70px" onchange="S.guests[${gi}].table=this.value;save()"></td>
+          <td><input type="text" value="${esc(g.notes||'')}" placeholder="—" class="inline-edit" style="width:100px" onchange="S.guests[${gi}].notes=this.value;save()"></td>
+          <td><span class="del-x" onclick="S.guests.splice(${gi},1);save();render()">✕</span></td>
+        </tr>`;
+      }).join('')}
+    </table></div>
+    ${filtered.length===0?'<div class="empty-state"><div class="emoji">&#127881;</div>No guests in this filter.</div>':''}
+  </div>`;
+}
+function addGuest() { S.guests.push({id:'g_'+uid(), name:'', group:'Couple Friends', side:'Both', status:'Waiting', qty:1, meal:'', table:'', notes:''}); save(); render(); }
+
+// ─── VENUES ───
+function rVenues() {
+  const fav = S.venues.find(v => v.favorite);
+  return `
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">Venue Comparison</h2>
+      <button class="btn btn-primary" onclick="addVenue()">+ Add Venue</button>
+    </div>
+    <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Add and compare venues side by side. Star your favorite to highlight it.</p>
+  </div>
+
+  ${S.venues.length === 0 ? '<div class="card"><div class="empty-state"><div class="emoji">&#127970;</div>No venues added yet. Click "+ Add Venue" to start comparing options.</div></div>' :
+  S.venues.map((v, i) => `
+    <div class="venue-card ${v.favorite?'favorite':''}" style="margin-bottom:16px">
+      <div class="venue-header">
+        <div style="flex:1">
+          <input type="text" value="${esc(v.name)}" placeholder="Venue Name" style="border:none;background:transparent;font-size:18px;font-weight:700;color:var(--primary);padding:0;width:100%" onchange="S.venues[${i}].name=this.value;save()">
+          <input type="text" value="${esc(v.location||'')}" placeholder="City, State" style="border:none;background:transparent;font-size:13px;color:var(--text-light);padding:0;margin-top:2px;width:100%" onchange="S.venues[${i}].location=this.value;save()">
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="star-btn" title="${v.favorite?'Remove favorite':'Set as favorite'}" onclick="S.venues.forEach(x=>x.favorite=false);S.venues[${i}].favorite=!S.venues[${i}].favorite;save();render()">${v.favorite?'&#9733;':'&#9734;'}</button>
+          <span class="del-x" style="font-size:18px" onclick="S.venues.splice(${i},1);save();render()">✕</span>
+        </div>
+      </div>
+      <div class="venue-body">
+        <div class="grid-2">
+          <div>
+            <div class="venue-field"><span class="vf-label">Type</span><input type="text" value="${esc(v.type||'')}" placeholder="Estate, Hotel, Barn..." class="inline-edit" style="text-align:right" onchange="S.venues[${i}].type=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">Capacity</span><input type="text" value="${esc(v.capacity||'')}" placeholder="e.g. 250 max" class="inline-edit" style="text-align:right" onchange="S.venues[${i}].capacity=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">Venue Fee</span><input type="text" value="${esc(v.fee||'')}" placeholder="$0" class="inline-edit" style="text-align:right" onchange="S.venues[${i}].fee=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">F&B Minimum</span><input type="text" value="${esc(v.fbMin||'')}" placeholder="$0" class="inline-edit" style="text-align:right" onchange="S.venues[${i}].fbMin=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">Per Plate Cost</span><input type="text" value="${esc(v.perPlate||'')}" placeholder="$0" class="inline-edit" style="text-align:right" onchange="S.venues[${i}].perPlate=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">Total Est. Cost</span><input type="text" value="${esc(v.totalCost||'')}" placeholder="$0" class="inline-edit" style="text-align:right;font-weight:600" onchange="S.venues[${i}].totalCost=this.value;save()"></div>
+          </div>
+          <div>
+            <div class="venue-field"><span class="vf-label">Indoor / Outdoor</span><input type="text" value="${esc(v.setting||'')}" placeholder="Both, Indoor, Outdoor" class="inline-edit" style="text-align:right" onchange="S.venues[${i}].setting=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">Catering</span><input type="text" value="${esc(v.catering||'')}" placeholder="In-house, BYO, Preferred list" class="inline-edit" style="text-align:right" onchange="S.venues[${i}].catering=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">Bar Options</span><input type="text" value="${esc(v.bar||'')}" placeholder="Open bar, BYOB, Cash bar" class="inline-edit" style="text-align:right" onchange="S.venues[${i}].bar=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">Availability</span><input type="text" value="${esc(v.availability||'')}" placeholder="Date availability" class="inline-edit" style="text-align:right" onchange="S.venues[${i}].availability=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">Contact</span><input type="text" value="${esc(v.contact||'')}" placeholder="Name / phone / email" class="inline-edit" style="text-align:right" onchange="S.venues[${i}].contact=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">Website</span><input type="url" value="${esc(v.website||'')}" placeholder="https://..." class="inline-edit" style="text-align:right" onchange="S.venues[${i}].website=this.value;save()"></div>
+          </div>
+        </div>
+        <div class="grid-2" style="margin-top:4px">
+          <div>
+            <div class="venue-field"><span class="vf-label">Parking</span><input type="text" value="${esc(v.parking||'')}" placeholder="Lot, valet, street..." class="inline-edit" style="text-align:right" onchange="S.venues[${i}].parking=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">Lodging Nearby</span><input type="text" value="${esc(v.lodging||'')}" placeholder="Hotels, blocks available" class="inline-edit" style="text-align:right" onchange="S.venues[${i}].lodging=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">Travel Distance</span><input type="text" value="${esc(v.distance||'')}" placeholder="Distance for guests" class="inline-edit" style="text-align:right" onchange="S.venues[${i}].distance=this.value;save()"></div>
+          </div>
+          <div>
+            <div class="venue-field"><span class="vf-label">Ceremony On-Site</span><input type="text" value="${esc(v.ceremonyOnSite||'')}" placeholder="Yes / No" class="inline-edit" style="text-align:right" onchange="S.venues[${i}].ceremonyOnSite=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">Rain Plan</span><input type="text" value="${esc(v.rainPlan||'')}" placeholder="Tent, indoor backup..." class="inline-edit" style="text-align:right" onchange="S.venues[${i}].rainPlan=this.value;save()"></div>
+            <div class="venue-field"><span class="vf-label">Restrictions</span><input type="text" value="${esc(v.restrictions||'')}" placeholder="Noise curfew, no open flame..." class="inline-edit" style="text-align:right" onchange="S.venues[${i}].restrictions=this.value;save()"></div>
+          </div>
+        </div>
+        <div class="venue-pros-cons">
+          <div class="venue-pros">
+            <div style="font-weight:600;color:#155724;margin-bottom:4px">Pros</div>
+            <textarea rows="3" placeholder="What you love about this venue..." style="border:none;background:transparent;width:100%;font-size:12px;resize:vertical" onchange="S.venues[${i}].pros=this.value;save()">${esc(v.pros||'')}</textarea>
+          </div>
+          <div class="venue-cons">
+            <div style="font-weight:600;color:#721C24;margin-bottom:4px">Cons</div>
+            <textarea rows="3" placeholder="Concerns or drawbacks..." style="border:none;background:transparent;width:100%;font-size:12px;resize:vertical" onchange="S.venues[${i}].cons=this.value;save()">${esc(v.cons||'')}</textarea>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <div style="font-weight:600;font-size:13px;color:var(--text-light);margin-bottom:4px">Additional Notes</div>
+          <textarea rows="2" placeholder="Visit dates, impressions, questions to ask..." style="font-size:12px;resize:vertical" onchange="S.venues[${i}].notes=this.value;save()">${esc(v.notes||'')}</textarea>
+        </div>
+      </div>
+    </div>
+  `).join('')}`;
+}
+function addVenue() { S.venues.push({id:'ven_'+uid(), name:'', location:'', type:'', capacity:'', fee:'', fbMin:'', perPlate:'', totalCost:'', setting:'', catering:'', bar:'', availability:'', contact:'', website:'', parking:'', lodging:'', distance:'', ceremonyOnSite:'', rainPlan:'', restrictions:'', pros:'', cons:'', notes:'', favorite:false}); save(); render(); }
+
+// ─── CHECKLIST ───
+function rChecklist() {
+  const ck = checkStats();
+  return `
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <h2 style="margin:0">Planning Checklist</h2>
+      <span style="font-size:14px;font-weight:600;color:var(--sage)">${ck.checked} / ${ck.total} complete (${pct(ck.checked,ck.total)}%)</span>
+    </div>
+    <div class="progress-wrap" style="margin-top:12px;margin-bottom:0"><div class="progress-bar" style="height:10px"><div class="progress-fill" style="width:${pct(ck.checked,ck.total)}%;background:linear-gradient(90deg,var(--sage),var(--accent))"></div></div></div>
+  </div>
+  ${Object.entries(S.checklistItems).map(([phase, items]) => {
+    const done = items.filter(it => S.checklist[it.id]).length, p = pct(done, items.length);
+    return `<div class="card">
+      <div class="phase-header" onclick="this.parentElement.querySelector('.cl-body').style.display=this.parentElement.querySelector('.cl-body').style.display==='none'?'block':'none'">
+        <h3>${esc(phase)}</h3>
+        <span class="phase-count">${done}/${items.length} — ${p}%</span>
+      </div>
+      <div class="cl-body">
+        ${items.map((it, idx) => {
+          const checked = S.checklist[it.id];
+          return `<div class="check-item ${checked?'checked':''}">
+            <input type="checkbox" ${checked?'checked':''} onchange="S.checklist['${it.id}']=this.checked;save();render()">
+            <input type="text" value="${esc(it.text)}" class="inline-edit" style="flex:1" onchange="S.checklistItems['${phase}'][${idx}].text=this.value;save()">
+            <span class="del-x" onclick="S.checklistItems['${phase}'].splice(${idx},1);save();render()">✕</span>
+          </div>`;
+        }).join('')}
+        <div class="add-row">
+          <input type="text" placeholder="+ Add a task..." id="addTask_${phase.replace(/\s/g,'_')}" onkeydown="if(event.key==='Enter')addCheckItem('${phase}',this.value)">
+          <button class="btn btn-outline btn-sm" onclick="addCheckItem('${phase}',document.getElementById('addTask_${phase.replace(/\s/g,'_')}').value)">Add</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('')}
+  <div class="card">
+    <button class="btn btn-primary" onclick="addCheckPhase()">+ Add New Phase</button>
+  </div>`;
+}
+function addCheckItem(phase, text) {
+  if (!text.trim()) return;
+  S.checklistItems[phase].push({id:phase+'_'+uid(), text:text.trim()});
+  save(); render();
+}
+function addCheckPhase() {
+  const name = prompt('Phase name (e.g. "2 Weeks Out"):');
+  if (name && name.trim()) { S.checklistItems[name.trim()] = []; save(); render(); }
+}
+
+// ─── VENDORS ───
+function rVendors() {
+  const bk = S.vendors.filter(v=>v.stage==='Booked').length;
+  return `
+  <div class="grid-3">
+    <div class="stat-card sage"><div class="stat-num">${bk}</div><div class="stat-label">Booked</div></div>
+    <div class="stat-card"><div class="stat-num">${S.vendors.filter(v=>v.stage==='Inquiry Sent'||v.stage==='Meeting Scheduled').length}</div><div class="stat-label">In Progress</div></div>
+    <div class="stat-card rose"><div class="stat-num">${S.vendors.filter(v=>v.stage==='Not Started').length}</div><div class="stat-label">Not Started</div></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">Vendor Tracker</h2>
+      <button class="btn btn-primary" onclick="addVendor()">+ Add Vendor</button>
+    </div>
+    <div style="overflow-x:auto"><table>
+      <tr><th>Type</th><th>Vendor Name</th><th>Contact</th><th>Phone</th><th>Email</th><th>Status</th><th style="text-align:right">Cost</th><th>Notes</th><th></th></tr>
+      ${S.vendors.map((v,i) => `<tr>
+        <td><input type="text" value="${esc(v.type)}" class="inline-edit" style="width:100px;font-weight:600" onchange="S.vendors[${i}].type=this.value;save()"></td>
+        <td><input type="text" value="${esc(v.name)}" placeholder="—" class="inline-edit" style="min-width:100px" onchange="S.vendors[${i}].name=this.value;save()"></td>
+        <td><input type="text" value="${esc(v.contact)}" placeholder="—" class="inline-edit" style="width:100px" onchange="S.vendors[${i}].contact=this.value;save()"></td>
+        <td><input type="tel" value="${esc(v.phone)}" placeholder="—" class="inline-edit" style="width:110px" onchange="S.vendors[${i}].phone=this.value;save()"></td>
+        <td><input type="email" value="${esc(v.email)}" placeholder="—" class="inline-edit" style="width:140px" onchange="S.vendors[${i}].email=this.value;save()"></td>
+        <td><select class="inline-edit" style="font-weight:600;color:${v.stage==='Booked'||v.stage==='Paid in Full'?'var(--success)':v.stage==='Not Started'?'var(--text-light)':'var(--warning)'}" onchange="S.vendors[${i}].stage=this.value;save();render()">${['Not Started','Researching','Inquiry Sent','Meeting Scheduled','Proposal Received','Booked','Paid in Full'].map(o=>`<option ${v.stage===o?'selected':''}>${o}</option>`).join('')}</select></td>
+        <td><input type="number" value="${v.cost||''}" placeholder="$0" class="inline-edit" style="width:80px;text-align:right" onchange="S.vendors[${i}].cost=this.value;save()"></td>
+        <td><input type="text" value="${esc(v.notes||'')}" placeholder="—" class="inline-edit" style="width:120px" onchange="S.vendors[${i}].notes=this.value;save()"></td>
+        <td><span class="del-x" onclick="S.vendors.splice(${i},1);save();render()">✕</span></td>
+      </tr>`).join('')}
+    </table></div>
+  </div>`;
+}
+function addVendor() { S.vendors.push({id:'v_'+uid(), type:'New Vendor', name:'', contact:'', phone:'', email:'', stage:'Not Started', cost:'', notes:''}); save(); render(); }
+
+// ─── SEATING ───
+function rSeating() {
+  const seated = S.seating.reduce((s,t) => s+t.guests.length, 0);
+  return `
+  <div class="grid-2">
+    <div class="stat-card sage"><div class="stat-num">${seated}</div><div class="stat-label">Guests Seated</div></div>
+    <div class="stat-card"><div class="stat-num">${S.seating.length}</div><div class="stat-label">Tables</div></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">Seating Arrangement</h2>
+      <button class="btn btn-primary" onclick="addTable()">+ Add Table</button>
+    </div>
+    <div class="seating-grid">
+      ${S.seating.map((t,ti) => `
+        <div class="table-card ${t.type==='sweetheart'?'sweetheart':''}">
+          <div style="display:flex;justify-content:center;align-items:center;gap:6px;margin-bottom:8px">
+            <input type="text" value="${esc(t.name)}" class="inline-edit" style="text-align:center;font-weight:700;font-size:13px;color:var(--primary);width:120px" onchange="S.seating[${ti}].name=this.value;save()">
+            <span class="del-x" onclick="S.seating.splice(${ti},1);save();render()">✕</span>
+          </div>
+          <div class="table-guests">
+            ${t.guests.map((g,gi) => `<div class="guest-name">${esc(g)} <span class="del-x" onclick="S.seating[${ti}].guests.splice(${gi},1);save();render()">✕</span></div>`).join('')}
+            <div style="margin-top:6px"><input type="text" placeholder="+ Add guest" style="font-size:11px;padding:4px 8px" onkeydown="if(event.key==='Enter'&&this.value.trim()){S.seating[${ti}].guests.push(this.value.trim());save();render()}"></div>
+          </div>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+function addTable() { S.seating.push({id:'s_'+uid(), name:'Table '+(S.seating.length), type:'regular', guests:[]}); save(); render(); }
+
+// ─── DAY-OF TIMELINE ───
+function rTimeline() {
+  return `
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">Run of Show — Wedding Day</h2>
+      <button class="btn btn-primary" onclick="addROS()">+ Add Event</button>
+    </div>
+    <p style="font-size:13px;color:var(--text-light);margin-bottom:20px">March 12, 2026 — Every moment is editable. Drag the schedule to make it yours.</p>
+    <div class="timeline">
+      ${S.runOfShow.map((e,i) => `
+        <div class="timeline-item">
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            <div style="flex:1">
+              <input type="text" value="${esc(e.time)}" class="inline-edit" style="font-size:12px;font-weight:700;color:var(--accent);width:90px" onchange="S.runOfShow[${i}].time=this.value;save()">
+              <input type="text" value="${esc(e.event)}" class="inline-edit" style="font-size:13px;font-weight:500;width:100%" onchange="S.runOfShow[${i}].event=this.value;save()">
+              <input type="text" value="${esc(e.detail)}" class="inline-edit" style="font-size:11px;color:var(--text-light);width:100%" onchange="S.runOfShow[${i}].detail=this.value;save()">
+            </div>
+            <div style="display:flex;gap:2px;flex-shrink:0;padding-top:2px">
+              ${i>0?`<button class="btn btn-outline btn-sm" onclick="[S.runOfShow[${i}],S.runOfShow[${i-1}]]=[S.runOfShow[${i-1}],S.runOfShow[${i}]];save();render()">&#9650;</button>`:''}
+              ${i<S.runOfShow.length-1?`<button class="btn btn-outline btn-sm" onclick="[S.runOfShow[${i}],S.runOfShow[${i+1}]]=[S.runOfShow[${i+1}],S.runOfShow[${i}]];save();render()">&#9660;</button>`:''}
+              <span class="del-x" onclick="S.runOfShow.splice(${i},1);save();render()">✕</span>
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">Weekend Schedule</h2>
+      <button class="btn btn-primary" onclick="addWeekend()">+ Add Event</button>
+    </div>
+    <div style="overflow-x:auto"><table>
+      <tr><th>Day</th><th>Event</th><th>Time</th><th>Notes</th><th></th></tr>
+      ${S.weekend.map((w,i) => `<tr>
+        <td><select class="inline-edit" onchange="S.weekend[${i}].day=this.value;save()">${['Thursday','Friday','Saturday','Sunday','Monday'].map(d=>`<option ${w.day===d?'selected':''}>${d}</option>`).join('')}</select></td>
+        <td><input type="text" value="${esc(w.event)}" class="inline-edit" onchange="S.weekend[${i}].event=this.value;save()"></td>
+        <td><input type="text" value="${esc(w.time)}" class="inline-edit" style="width:110px" onchange="S.weekend[${i}].time=this.value;save()"></td>
+        <td><input type="text" value="${esc(w.notes||'')}" class="inline-edit" placeholder="—" onchange="S.weekend[${i}].notes=this.value;save()"></td>
+        <td><span class="del-x" onclick="S.weekend.splice(${i},1);save();render()">✕</span></td>
+      </tr>`).join('')}
+    </table></div>
+  </div>`;
+}
+function addROS() { S.runOfShow.push({id:'r_'+uid(), time:'', event:'New Event', detail:''}); save(); render(); }
+function addWeekend() { S.weekend.push({id:'w_'+uid(), day:'Friday', event:'', time:'', notes:''}); save(); render(); }
+
+// ─── REGISTRY ───
+function rRegistry() {
+  const totalItems = Object.values(S.registryCats).reduce((s,items)=>s+items.length, 0);
+  const purchased = Object.values(S.registryChecked).filter(Boolean).length;
+  return `
+  <div class="grid-3">
+    <div class="stat-card"><div class="stat-num">${totalItems}</div><div class="stat-label">Total Items</div></div>
+    <div class="stat-card sage"><div class="stat-num">${purchased}</div><div class="stat-label">Purchased</div></div>
+    <div class="stat-card accent"><div class="stat-num">${totalItems-purchased}</div><div class="stat-label">Still Needed</div></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">Registry Checklist</h2>
+      <button class="btn btn-primary" onclick="addRegCat()">+ Add Category</button>
+    </div>
+    ${Object.entries(S.registryCats).map(([cat, items]) => {
+      const done = items.filter(it => S.registryChecked[it.id]).length;
+      return `<div class="registry-cat">
+        <div class="registry-cat-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span>${esc(cat)}</span>
+            <span class="del-x" style="font-size:11px" onclick="event.stopPropagation();delete S.registryCats['${cat}'];save();render()">✕</span>
+          </div>
+          <span class="badge ${done===items.length&&items.length>0?'badge-yes':'badge-pending'}">${done}/${items.length}</span>
+        </div>
+        <div class="registry-items" style="display:none">
+          ${items.map((it, idx) => `<div class="registry-item">
+            <input type="checkbox" ${S.registryChecked[it.id]?'checked':''} onchange="S.registryChecked['${it.id}']=this.checked;save();render()">
+            <input type="text" value="${esc(it.text)}" class="inline-edit" style="flex:1;${S.registryChecked[it.id]?'text-decoration:line-through;color:var(--text-light)':''}" onchange="S.registryCats['${cat}'][${idx}].text=this.value;save()">
+            <span class="del-x" onclick="S.registryCats['${cat}'].splice(${idx},1);save();render()">✕</span>
+          </div>`).join('')}
+          <div class="add-row">
+            <input type="text" placeholder="+ Add item..." id="addReg_${cat.replace(/[^a-zA-Z]/g,'')}" onkeydown="if(event.key==='Enter')addRegItem('${cat}',this.value)">
+            <button class="btn btn-outline btn-sm" onclick="addRegItem('${cat}',document.getElementById('addReg_${cat.replace(/[^a-zA-Z]/g,'')}').value)">Add</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function addRegItem(cat, text) { if(!text.trim()) return; S.registryCats[cat].push({id:uid(), text:text.trim()}); save(); render(); }
+function addRegCat() { const n=prompt('Category name:'); if(n&&n.trim()){ S.registryCats[n.trim()]=[]; save(); render(); } }
+
+// ─── GIFTS ───
+function rGifts() {
+  const sent = S.giftTracker.filter(g=>g.thankYou).length;
+  return `
+  <div class="grid-3">
+    <div class="stat-card"><div class="stat-num">${S.giftTracker.length}</div><div class="stat-label">Gifts Received</div></div>
+    <div class="stat-card sage"><div class="stat-num">${sent}</div><div class="stat-label">Thank Yous Sent</div></div>
+    <div class="stat-card rose"><div class="stat-num">${S.giftTracker.length - sent}</div><div class="stat-label">Still Need Thanks</div></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">Gift Tracker</h2>
+      <button class="btn btn-primary" onclick="addGift()">+ Add Gift</button>
+    </div>
+    ${S.giftTracker.length===0?'<div class="empty-state"><div class="emoji">&#127873;</div>No gifts tracked yet. Add them as they come in!</div>':`
+    <div style="overflow-x:auto"><table>
+      <tr><th>From</th><th>Gift / Amount</th><th>Type</th><th>Date Received</th><th style="text-align:center">Thank You</th><th>Address</th><th></th></tr>
+      ${S.giftTracker.map((g,i) => `<tr>
+        <td><input type="text" value="${esc(g.from)}" class="inline-edit" style="font-weight:500;min-width:100px" onchange="S.giftTracker[${i}].from=this.value;save()"></td>
+        <td><input type="text" value="${esc(g.item)}" class="inline-edit" style="min-width:120px" onchange="S.giftTracker[${i}].item=this.value;save()"></td>
+        <td><select class="inline-edit" onchange="S.giftTracker[${i}].type=this.value;save()">${['Cash/Check','Registry','Other'].map(o=>`<option ${g.type===o?'selected':''}>${o}</option>`).join('')}</select></td>
+        <td><input type="date" value="${g.received||''}" class="inline-edit" onchange="S.giftTracker[${i}].received=this.value;save()"></td>
+        <td style="text-align:center"><input type="checkbox" ${g.thankYou?'checked':''} style="accent-color:var(--sage)" onchange="S.giftTracker[${i}].thankYou=this.checked;save();render()"></td>
+        <td><input type="text" value="${esc(g.address||'')}" class="inline-edit" placeholder="—" style="min-width:120px" onchange="S.giftTracker[${i}].address=this.value;save()"></td>
+        <td><span class="del-x" onclick="S.giftTracker.splice(${i},1);save();render()">✕</span></td>
+      </tr>`).join('')}
+    </table></div>`}
+  </div>`;
+}
+function addGift() { S.giftTracker.push({id:'gift_'+uid(), from:'', item:'', type:'Cash/Check', received:'', thankYou:false, address:''}); save(); render(); }
+
+// ─── HONEYMOON ───
+function rHoneymoon() {
+  return `
+  <div class="card">
+    <h2>Honeymoon Brainstorm</h2>
+    <textarea rows="5" placeholder="Where are you dreaming of going? Destinations, budget, must-dos..." onchange="S.honeymoonNotes=this.value;save()">${esc(S.honeymoonNotes)}</textarea>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">Itinerary</h2>
+      <button class="btn btn-primary" onclick="addHDay()">+ Add Day</button>
+    </div>
+    ${S.honeymoonDays.map((d,i) => `
+      <div class="itinerary-day">
+        <div class="day-num">${d.day}</div>
+        <div class="day-info" style="flex:1">
+          <input type="text" value="${esc(d.title)}" class="inline-edit" style="font-size:14px;font-weight:600;width:100%" onchange="S.honeymoonDays[${i}].title=this.value;save()">
+          <input type="text" value="${esc(d.desc)}" class="inline-edit" style="font-size:12px;color:var(--text-light);width:100%" onchange="S.honeymoonDays[${i}].desc=this.value;save()">
+        </div>
+        <span class="del-x" onclick="S.honeymoonDays.splice(${i},1);S.honeymoonDays.forEach((x,j)=>x.day=j+1);save();render()">✕</span>
+      </div>`).join('')}
+  </div>
+  <div class="card">
+    <h2>Packing List</h2>
+    <textarea rows="5" placeholder="Start your packing list here..." onchange="S.packingList=this.value;save()">${esc(S.packingList)}</textarea>
+  </div>`;
+}
+function addHDay() { S.honeymoonDays.push({id:'h_'+uid(), day:S.honeymoonDays.length+1, title:'Day '+(S.honeymoonDays.length+1), desc:'Plan your activities'}); save(); render(); }
+
+// ─── Charts ───
+function renderCharts() {
+  const bc = document.getElementById('budgetChart');
+  if (bc) new Chart(bc, { type:'doughnut', data:{ labels:S.budgetCats.map(c=>c.name), datasets:[{data:S.budgetCats.map(c=>c.pct), backgroundColor:S.budgetCats.map((_,i)=>COLORS[i%COLORS.length]), borderWidth:2, borderColor:'#fff'}] }, options:{ responsive:true, maintainAspectRatio:false, cutout:'55%', plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:ctx=>`${ctx.label}: ${ctx.parsed}% (${fmt$(S.budgetTotal*ctx.parsed/100)})` } } } } });
+  const gc = document.getElementById('guestChart');
+  if (gc) { const gs=guestStats(); new Chart(gc, { type:'doughnut', data:{ labels:['Confirmed','Awaiting','Declined'], datasets:[{data:[gs.yes,gs.waiting,gs.no], backgroundColor:['#8FA68A','#E67E22','#C0392B'], borderWidth:2, borderColor:'#fff'}] }, options:{ responsive:true, maintainAspectRatio:false, cutout:'55%', plugins:{legend:{display:false}} } }); }
+  const sc = document.getElementById('spendChart');
+  if (sc) new Chart(sc, { type:'bar', data:{ labels:S.budgetCats.map(c=>c.name.length>14?c.name.slice(0,14)+'…':c.name), datasets:[ {label:'Allocated', data:S.budgetCats.map(c=>Math.round(S.budgetTotal*(Number(c.pct)||0)/100)), backgroundColor:'rgba(123,109,94,0.25)', borderRadius:3}, {label:'Spent', data:S.budgetCats.map(c=>Number(S.budgetSpent[c.id])||0), backgroundColor:S.budgetCats.map((_,i)=>COLORS[i%COLORS.length]), borderRadius:3} ] }, options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}, scales:{ x:{ticks:{callback:v=>'$'+(v/1000)+'k'},grid:{color:'#F0EDE8'}}, y:{ticks:{font:{size:10}},grid:{display:false}} } } });
+}
+
+// ─── Boot ───
+renderNav();
+render();
+</script>
+</body>
+</html>
