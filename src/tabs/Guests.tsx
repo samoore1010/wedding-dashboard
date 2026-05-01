@@ -62,9 +62,10 @@ export function Guests() {
 
   const exportCsv = () => {
     const rows = [
-      ['Name', 'Group', 'Side', 'Party Size', 'RSVP', 'Meal', 'Table', 'Notes'],
+      ['Name', 'Companions', 'Group', 'Side', 'Party Size', 'RSVP', 'Meal', 'Table', 'Notes'],
       ...guests.map((g) => [
         g.name,
+        (g.companions ?? []).filter(Boolean).join('; '),
         g.group,
         g.side,
         String(g.qty),
@@ -207,14 +208,32 @@ function GuestRow({
   const statusColor =
     guest.status === 'Yes' ? 'text-success' : guest.status === 'No' ? 'text-danger' : 'text-warning';
   return (
-    <tr className="hover:bg-bg/40">
-      <td className="px-2 py-1.5 min-w-[160px]">
+    <tr className="hover:bg-bg/40 align-top">
+      <td className="px-2 py-1.5 min-w-[180px]">
         <EditableText
           value={guest.name}
           onChange={(v) => onUpdate({ name: v })}
           placeholder="Guest name"
           className="font-medium"
         />
+        {guest.qty > 1 && (
+          <div className="mt-1 pl-3 border-l-2 border-border space-y-0.5">
+            {Array.from({ length: guest.qty - 1 }).map((_, i) => (
+              <EditableText
+                key={i}
+                value={(guest.companions ?? [])[i] ?? ''}
+                onChange={(v) => {
+                  const next = [...(guest.companions ?? [])];
+                  next[i] = v;
+                  onUpdate({ companions: next.slice(0, guest.qty - 1) });
+                }}
+                placeholder={`+ companion ${i + 1}`}
+                className="text-xs text-muted"
+                blank=""
+              />
+            ))}
+          </div>
+        )}
       </td>
       <td className="px-2 py-1.5">
         <Select
@@ -244,7 +263,11 @@ function GuestRow({
           min={1}
           max={20}
           value={guest.qty || 1}
-          onChange={(e) => onUpdate({ qty: Number(e.target.value) || 1 })}
+          onChange={(e) => {
+            const newQty = Math.max(1, Number(e.target.value) || 1);
+            const next = (guest.companions ?? []).slice(0, Math.max(0, newQty - 1));
+            onUpdate({ qty: newQty, companions: next });
+          }}
           className="w-16 text-center"
         />
       </td>
