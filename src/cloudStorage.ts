@@ -1,21 +1,10 @@
 import type { StateStorage } from 'zustand/middleware';
 
-const ID_PATH_RE = /^\/w\/([A-Za-z0-9_-]+)/;
-
-export const getWeddingIdFromPath = (): string | null => {
-  if (typeof window === 'undefined') return null;
-  const m = window.location.pathname.match(ID_PATH_RE);
-  return m?.[1] ?? null;
-};
-
-export const newWeddingId = (): string => {
-  const a = Math.random().toString(36).slice(2, 14);
-  const b = Math.random().toString(36).slice(2, 14);
-  return 'w_' + a + b; // 26 chars, ~120 bits of entropy
-};
-
+// Single-wedding model: in production we sync against one shared
+// /api/wedding endpoint backed by a single file on the Railway volume.
+// In dev we fall through to localStorage (no API server is running).
 export const isCloudMode = (): boolean =>
-  typeof window !== 'undefined' && getWeddingIdFromPath() !== null;
+  typeof window !== 'undefined' && import.meta.env.PROD;
 
 type SyncListener = (state: 'idle' | 'saving' | 'error') => void;
 const listeners = new Set<SyncListener>();
@@ -27,18 +16,19 @@ const setSyncState = (s: 'idle' | 'saving' | 'error') => {
 export const onSyncStateChange = (l: SyncListener) => {
   listeners.add(l);
   l(currentState);
-  return () => listeners.delete(l);
+  return () => {
+    listeners.delete(l);
+  };
 };
 export const getSyncState = () => currentState;
 
 const DEBOUNCE_MS = 700;
+const ENDPOINT = '/api/wedding';
 
 export const cloudStorage: StateStorage = {
-  getItem: async (_name) => {
-    const id = getWeddingIdFromPath();
-    if (!id) return null;
+  getItem: async () => {
     try {
-      const res = await fetch(`/api/wedding/${id}`, { cache: 'no-store' });
+      const res = await fetch(ENDPOINT, { cache: 'no-store' });
       if (res.status === 204) return null;
       if (!res.ok) {
         setSyncState('error');
@@ -59,14 +49,12 @@ export const cloudStorage: StateStorage = {
 
     const flush = async () => {
       if (inFlight || pendingValue === null) return;
-      const id = getWeddingIdFromPath();
-      if (!id) return;
       const value = pendingValue;
       pendingValue = null;
       inFlight = true;
       setSyncState('saving');
       try {
-        const res = await fetch(`/api/wedding/${id}`, {
+        const res = await fetch(ENDPOINT, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: value,
@@ -78,7 +66,6 @@ export const cloudStorage: StateStorage = {
         setSyncState('error');
       } finally {
         inFlight = false;
-        // if more changes came in while we were saving, flush again
         if (pendingValue !== null) {
           if (timer) clearTimeout(timer);
           timer = setTimeout(flush, DEBOUNCE_MS);
@@ -94,11 +81,3 @@ export const cloudStorage: StateStorage = {
   })(),
   removeItem: async () => {},
 };
-
-// Try to flush on tab close (best-effort)
-if (typeof window !== 'undefined' && isCloudMode()) {
-  window.addEventListener('pagehide', () => {
-    // sendBeacon doesn't support PUT; we rely on the debounced save having
-    // already fired in most cases. This is a graceful fallback only.
-  });
-}
