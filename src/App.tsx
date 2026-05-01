@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { Header } from './components/Header';
 import { Nav } from './components/Nav';
 import { SettingsDrawer } from './components/SettingsDrawer';
+import { SyncIndicator } from './components/SyncIndicator';
 import { ConfirmDialog } from './components/ui/ConfirmDialog';
 import { useStore } from './store';
 import type { TabId } from './types';
@@ -60,7 +61,7 @@ function App() {
       </div>
 
       <footer className="no-print py-6 text-center text-xs text-muted">
-        Made with care • Stored locally in your browser
+        Made with care • <SyncIndicator />
       </footer>
 
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
