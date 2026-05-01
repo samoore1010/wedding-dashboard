@@ -298,12 +298,12 @@ function GuestRow({
         </Select>
       </td>
       <td className="px-2 py-1.5">
-        <EditableText
-          value={guest.table || ''}
-          onChange={(v) => onUpdate({ table: v })}
-          placeholder="—"
-          className="w-20 text-xs"
-        />
+        <span
+          className="text-xs text-muted"
+          title={guest.table ? `Seated at ${guest.table}` : 'Drag this guest onto a table in the Seating tab'}
+        >
+          {guest.table || '—'}
+        </span>
       </td>
       <td className="px-2 py-1.5">
         <EditableText

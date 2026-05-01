@@ -180,15 +180,15 @@ export const DEFAULT_VENDORS: Vendor[] = [
 ];
 
 export const DEFAULT_SEATING: SeatingTable[] = [
-  { id: 's0', name: 'Sweetheart Table', type: 'sweetheart', guests: [], capacity: 2 },
-  { id: 's1', name: 'Table 1', type: 'regular', guests: [], capacity: 8 },
-  { id: 's2', name: 'Table 2', type: 'regular', guests: [], capacity: 8 },
-  { id: 's3', name: 'Table 3', type: 'regular', guests: [], capacity: 8 },
-  { id: 's4', name: 'Table 4', type: 'regular', guests: [], capacity: 8 },
-  { id: 's5', name: 'Table 5', type: 'regular', guests: [], capacity: 8 },
-  { id: 's6', name: 'Table 6', type: 'regular', guests: [], capacity: 8 },
-  { id: 's7', name: 'Kings Table 1', type: 'kings', guests: [], capacity: 12 },
-  { id: 's8', name: 'Kings Table 2', type: 'kings', guests: [], capacity: 12 },
+  { id: 's0', name: 'Sweetheart Table', type: 'sweetheart', guestIds: [], capacity: 2 },
+  { id: 's1', name: 'Table 1', type: 'regular', guestIds: [], capacity: 8 },
+  { id: 's2', name: 'Table 2', type: 'regular', guestIds: [], capacity: 8 },
+  { id: 's3', name: 'Table 3', type: 'regular', guestIds: [], capacity: 8 },
+  { id: 's4', name: 'Table 4', type: 'regular', guestIds: [], capacity: 8 },
+  { id: 's5', name: 'Table 5', type: 'regular', guestIds: [], capacity: 8 },
+  { id: 's6', name: 'Table 6', type: 'regular', guestIds: [], capacity: 8 },
+  { id: 's7', name: 'Kings Table 1', type: 'kings', guestIds: [], capacity: 12 },
+  { id: 's8', name: 'Kings Table 2', type: 'kings', guestIds: [], capacity: 12 },
 ];
 
 export const DEFAULT_REGISTRY: Record<string, string[]> = {

@@ -19,9 +19,26 @@ export async function uploadImage(file: File): Promise<UploadedImage> {
   if (isCloudMode()) {
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch('/api/images', { method: 'POST', body: fd });
-    if (!res.ok) throw new Error(`Upload failed (${res.status})`);
-    const json = (await res.json()) as { url: string };
+    let res: Response;
+    try {
+      res = await fetch('/api/images', { method: 'POST', body: fd });
+    } catch (e: any) {
+      throw new Error(`Network error during upload: ${e?.message ?? 'unknown'}`);
+    }
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      const trimmed = detail.replace(/<[^>]+>/g, '').trim().slice(0, 120);
+      throw new Error(
+        `Upload failed (${res.status})${trimmed ? `: ${trimmed}` : ''}`
+      );
+    }
+    let json: { url: string };
+    try {
+      json = (await res.json()) as { url: string };
+    } catch {
+      throw new Error('Upload succeeded but server did not return JSON. The deploy may be missing the /api/images endpoint — try redeploying.');
+    }
+    if (!json?.url) throw new Error('Server response missing url field');
     return { src: json.url, cloud: true };
   }
   // Dev: stash as base64 data URL inside the JSON state
