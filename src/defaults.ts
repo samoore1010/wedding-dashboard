@@ -346,4 +346,5 @@ export const DEFAULT_STATE: AppState = {
   packingList: '',
   honeymoonDestination: '',
   honeymoonBudget: 0,
+  moodBoard: [],
 };

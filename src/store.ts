@@ -7,6 +7,7 @@ import type {
   Gift,
   Guest,
   HoneymoonDay,
+  MoodBoardItem,
   RegistryItem,
   RunOfShowItem,
   SeatingTable,
@@ -102,6 +103,11 @@ interface Actions {
   setHoneymoonDestination: (s: string) => void;
   setHoneymoonBudget: (n: number) => void;
 
+  // Mood Board
+  addMoodImage: (item: Omit<MoodBoardItem, 'id'>) => MoodBoardItem;
+  updateMoodImage: (id: string, patch: Partial<MoodBoardItem>) => void;
+  removeMoodImage: (id: string) => void;
+
   // Notes
   setNotes: (s: string) => void;
 
@@ -156,6 +162,7 @@ export const useStore = create<AppState & Actions>()(
               meal: '',
               table: '',
               notes: '',
+              companions: [],
               ...guest,
             },
           ],
@@ -475,6 +482,18 @@ export const useStore = create<AppState & Actions>()(
       setPackingList: (s2) => set({ packingList: s2 }),
       setHoneymoonDestination: (s2) => set({ honeymoonDestination: s2 }),
       setHoneymoonBudget: (n) => set({ honeymoonBudget: n }),
+
+      addMoodImage: (item) => {
+        const next: MoodBoardItem = { id: 'mb_' + uid(), ...item };
+        set((s) => ({ moodBoard: [...(s.moodBoard ?? []), next] }));
+        return next;
+      },
+      updateMoodImage: (id, patch) =>
+        set((s) => ({
+          moodBoard: (s.moodBoard ?? []).map((m) => (m.id === id ? { ...m, ...patch } : m)),
+        })),
+      removeMoodImage: (id) =>
+        set((s) => ({ moodBoard: (s.moodBoard ?? []).filter((m) => m.id !== id) })),
 
       setNotes: (s2) => set({ notes: s2 }),
 

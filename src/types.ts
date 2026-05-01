@@ -22,6 +22,8 @@ export interface Guest {
   table: string;
   notes: string;
   email?: string;
+  /** Names of additional party members beyond the primary guest. Length should equal qty - 1. */
+  companions?: string[];
 }
 
 export interface BudgetCategory {
@@ -130,6 +132,15 @@ export interface HoneymoonDay {
   desc: string;
 }
 
+export interface MoodBoardItem {
+  id: string;
+  /** Either a `/api/images/<id>` URL (cloud mode) or a base64 data URL (dev mode). */
+  src: string;
+  caption?: string;
+  /** Optional grouping label, e.g. "Florals", "Color Palette". */
+  section?: string;
+}
+
 export interface WeddingSettings {
   brideName: string;
   groomName: string;
@@ -162,6 +173,7 @@ export interface AppState {
   packingList: string;
   honeymoonDestination?: string;
   honeymoonBudget?: number;
+  moodBoard?: MoodBoardItem[];
 }
 
 export type TabId =
@@ -169,6 +181,7 @@ export type TabId =
   | 'budget'
   | 'guests'
   | 'venues'
+  | 'moodboard'
   | 'checklist'
   | 'vendors'
   | 'seating'
