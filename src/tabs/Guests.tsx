@@ -8,12 +8,20 @@ import { Input, Select } from '../components/ui/Field';
 import { EmptyState } from '../components/ui/EmptyState';
 import { IconButton } from '../components/ui/IconButton';
 import { confirmAction } from '../components/ui/ConfirmDialog';
-import type { Household, Member, GuestGroup, GuestSide, GuestStatus, MemberKind } from '../types';
+import type { Household, Member, GuestGroup, GuestSide, GuestStatus, GuestList, MemberKind } from '../types';
 import { cn, householdSize, repliedCount, suggestLabel } from '../utils';
 
 const RSVP_FILTERS = ['All', 'Yes', 'Waiting', 'No'] as const;
 const SIDE_FILTERS = ['All', 'Bride', 'Groom'] as const;
-const GROUP_BYS = ['Side', 'Relationship', 'None'] as const;
+const LIST_FILTERS = ['All', 'Invited', 'B-list', 'Maybe'] as const;
+const GROUP_BYS = ['Side', 'Relationship', 'List', 'None'] as const;
+const LISTS: GuestList[] = ['Invited', 'B-list', 'Maybe'];
+const listBadge: Record<GuestList, string> = {
+  Invited: '',
+  'B-list': 'bg-warning/15 text-warning',
+  Maybe: 'bg-bg text-muted border border-border',
+};
+const glist = (h: Household): GuestList => h.list ?? 'Invited';
 const GROUPS: GuestGroup[] = [
   'Couple Friends',
   'Bride Family',
@@ -51,6 +59,7 @@ export function Guests() {
 
   const [rsvp, setRsvp] = useState<(typeof RSVP_FILTERS)[number]>('All');
   const [side, setSide] = useState<(typeof SIDE_FILTERS)[number]>('All');
+  const [list, setList] = useState<(typeof LIST_FILTERS)[number]>('All');
   const [groupBy, setGroupBy] = useState<(typeof GROUP_BYS)[number]>('Side');
   const [search, setSearch] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -58,8 +67,14 @@ export function Guests() {
   const openHousehold = households.find((h) => h.id === openId) || null;
 
   const stats = useMemo(() => {
+    // Headcount counts Invited households only; B-list/Maybe are your buffer.
     let yes = 0, waiting = 0, no = 0, bride = 0, groom = 0;
+    let invitedHouseholds = 0, bListPeople = 0, maybePeople = 0;
     for (const h of households) {
+      const l = glist(h);
+      if (l === 'B-list') { bListPeople += h.members.length; continue; }
+      if (l === 'Maybe') { maybePeople += h.members.length; continue; }
+      invitedHouseholds++;
       for (const m of h.members) {
         if (m.rsvp === 'Yes') yes++;
         else if (m.rsvp === 'No') no++;
@@ -71,12 +86,21 @@ export function Guests() {
         }
       }
     }
-    return { total: yes + waiting + no, yes, waiting, no, bride, groom };
+    return { total: yes + waiting + no, yes, waiting, no, bride, groom, invitedHouseholds, bListPeople, maybePeople };
   }, [households]);
+
+  const totalHint = [
+    `${stats.invitedHouseholds} ${stats.invitedHouseholds === 1 ? 'household' : 'households'}`,
+    stats.bListPeople ? `${stats.bListPeople} B-list` : '',
+    stats.maybePeople ? `${stats.maybePeople} maybe` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return households.filter((h) => {
+      if (list !== 'All' && glist(h) !== list) return false;
       if (side !== 'All' && h.side !== side && h.side !== 'Both') return false;
       if (rsvp !== 'All' && !h.members.some((m) => m.rsvp === rsvp)) return false;
       if (q) {
@@ -85,7 +109,7 @@ export function Guests() {
       }
       return true;
     });
-  }, [households, side, rsvp, search]);
+  }, [households, side, rsvp, list, search]);
 
   const groups = useMemo(() => {
     if (groupBy === 'None') return [{ key: null as string | null, items: visible }];
@@ -93,6 +117,11 @@ export function Guests() {
       return (['Bride', 'Groom', 'Both'] as GuestSide[])
         .map((s) => ({ key: s as string, items: visible.filter((h) => h.side === s) }))
         .filter((g) => g.items.length);
+    }
+    if (groupBy === 'List') {
+      return LISTS.map((l) => ({ key: l as string, items: visible.filter((h) => glist(h) === l) })).filter(
+        (g) => g.items.length
+      );
     }
     const map = new Map<string, Household[]>();
     for (const h of visible) map.set(h.group, [...(map.get(h.group) || []), h]);
@@ -106,11 +135,12 @@ export function Guests() {
 
   const exportCsv = () => {
     const rows = [
-      ['Name', 'Household', 'Side', 'Group', 'Adult/Child', 'RSVP', 'Meal', 'Dietary', 'Table', 'Notes'],
+      ['Name', 'Household', 'List', 'Side', 'Group', 'Adult/Child', 'RSVP', 'Meal', 'Dietary', 'Table', 'Notes'],
       ...households.flatMap((h) =>
         h.members.map((m) => [
           m.name,
           h.label || suggestLabel(h.members),
+          glist(h),
           h.side,
           h.group,
           m.kind === 'child' ? 'Child' : 'Adult',
@@ -135,7 +165,7 @@ export function Guests() {
     <div className="space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <StatCard label="Total Guests" value={stats.total} hint={`${households.length} households`} />
+        <StatCard label="Invited" value={stats.total} hint={totalHint} />
         <StatCard label="Confirmed" value={stats.yes} tone="sage" />
         <StatCard label="Awaiting" value={stats.waiting} tone="warning" />
         <StatCard label="Declined" value={stats.no} tone="danger" />
@@ -168,6 +198,7 @@ export function Guests() {
           </div>
           <Segmented options={RSVP_FILTERS} value={rsvp} onChange={setRsvp} />
           <Segmented options={SIDE_FILTERS} value={side} onChange={setSide} tone="side" />
+          <Segmented options={LIST_FILTERS} value={list} onChange={setList} />
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-muted font-semibold whitespace-nowrap">Group by</span>
             <Select
@@ -216,7 +247,12 @@ export function Guests() {
                 )}
                 <div className="space-y-2.5">
                   {g.items.map((h) => (
-                    <HouseholdCard key={h.id} household={h} onOpen={() => setOpenId(h.id)} />
+                    <HouseholdCard
+                      key={h.id}
+                      household={h}
+                      onOpen={() => setOpenId(h.id)}
+                      onPromote={() => updateHousehold(h.id, { list: 'Invited' })}
+                    />
                   ))}
                 </div>
               </div>
@@ -314,11 +350,21 @@ function Segmented<T extends string>({
 
 /* ------------------------------ Household card ----------------------------- */
 
-function HouseholdCard({ household: h, onOpen }: { household: Household; onOpen: () => void }) {
+function HouseholdCard({
+  household: h,
+  onOpen,
+  onPromote,
+}: {
+  household: Household;
+  onOpen: () => void;
+  onPromote: () => void;
+}) {
   const size = householdSize(h);
   const replied = repliedCount(h);
   const allReplied = replied === size;
   const label = h.label.trim() || suggestLabel(h.members) || 'Untitled household';
+  const l = glist(h);
+  const notInvited = l !== 'Invited';
 
   return (
     <div
@@ -343,6 +389,11 @@ function HouseholdCard({ household: h, onOpen }: { household: Household; onOpen:
           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-bg border border-border text-muted">
             {h.group}
           </span>
+          {notInvited && (
+            <span className={cn('text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full', listBadge[l])}>
+              {l}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap gap-1.5 mt-2">
           {h.members.map((m) => (
@@ -361,9 +412,21 @@ function HouseholdCard({ household: h, onOpen }: { household: Household; onOpen:
         </div>
       </div>
       <div className="flex flex-col items-end justify-center gap-1 text-right shrink-0">
-        <span className={cn('text-xs font-semibold', allReplied ? 'text-success' : 'text-warning')}>
-          {replied} of {size} replied
-        </span>
+        {notInvited ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onPromote();
+            }}
+            className="text-xs font-semibold text-accent hover:text-primary border border-accent/40 rounded-full px-2.5 py-0.5"
+          >
+            Invite →
+          </button>
+        ) : (
+          <span className={cn('text-xs font-semibold', allReplied ? 'text-success' : 'text-warning')}>
+            {replied} of {size} replied
+          </span>
+        )}
         <span className="text-[11px] text-muted tabular-nums">
           {size} {size === 1 ? 'seat' : 'seats'}
         </span>
@@ -439,6 +502,28 @@ function EditDrawer({
                       onChange={(e) => onUpdateHousehold({ label: e.target.value })}
                       placeholder={suggestLabel(h.members) || 'e.g. The Smith Family'}
                     />
+                  </Labeled>
+                  <Labeled label="Guest list">
+                    <div className="grid grid-cols-3 rounded-lg border border-border overflow-hidden">
+                      {LISTS.map((l) => (
+                        <button
+                          key={l}
+                          onClick={() => onUpdateHousehold({ list: l })}
+                          className={cn(
+                            'h-9 text-[11px] font-semibold transition-colors',
+                            glist(h) === l
+                              ? l === 'Invited'
+                                ? 'bg-primary text-white'
+                                : l === 'B-list'
+                                ? 'bg-warning text-white'
+                                : 'bg-primary-soft text-white'
+                              : 'bg-surface text-muted hover:text-ink'
+                          )}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </div>
                   </Labeled>
                   <div className="grid grid-cols-2 gap-3">
                     <Labeled label="Side">

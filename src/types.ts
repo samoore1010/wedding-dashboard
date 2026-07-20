@@ -2,6 +2,8 @@ export type ThemeId = 'sage' | 'rose' | 'coastal' | 'burgundy' | 'modern';
 
 export type GuestStatus = 'Yes' | 'No' | 'Waiting';
 export type GuestSide = 'Both' | 'Bride' | 'Groom';
+/** Whether a household is firmly invited, a backup, or still undecided. */
+export type GuestList = 'Invited' | 'B-list' | 'Maybe';
 export type GuestGroup =
   | 'Couple Friends'
   | 'Bride Family'
@@ -37,6 +39,8 @@ export interface Household {
   label: string;
   side: GuestSide;
   group: GuestGroup;
+  /** Firm invite, backup (invite if space frees up), or undecided. */
+  list: GuestList;
   email: string;
   address: string;
   inviteSent: boolean;

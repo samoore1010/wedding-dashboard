@@ -271,6 +271,7 @@ export const useStore = create<AppState & Actions & UndoState>()(
               label: '',
               group: 'Couple Friends',
               side: 'Both',
+              list: 'Invited',
               email: '',
               address: '',
               inviteSent: false,
@@ -839,7 +840,7 @@ export const useStore = create<AppState & Actions & UndoState>()(
     }),
     {
       name: 'wedding-dashboard-v1',
-      version: 5,
+      version: 6,
       // Undo history is session-only — never sync it to the server/localStorage.
       partialize: (s) => {
         const { undoStack: _u, ...rest } = s as any;
@@ -913,6 +914,13 @@ export const useStore = create<AppState & Actions & UndoState>()(
         // v5: introduce the wedding party, groups labeled from the couple.
         if (version < 5 && !persisted.weddingParty) {
           persisted.weddingParty = defaultWeddingParty(persisted.settings);
+        }
+        // v6: every existing household is firmly Invited by default.
+        if (version < 6) {
+          persisted.households = (persisted.households ?? []).map((h: any) => ({
+            ...h,
+            list: h.list ?? 'Invited',
+          }));
         }
         return persisted;
       },

@@ -57,7 +57,9 @@ export function Nav({ active, onChange, mobileOpen, onMobileClose }: NavProps) {
     }));
 
   const badges = useMemo(() => {
-    const guestCount = households.reduce((s, h) => s + h.members.length, 0);
+    const guestCount = households
+      .filter((h) => (h.list ?? 'Invited') === 'Invited')
+      .reduce((s, h) => s + h.members.length, 0);
     let totalChecks = 0;
     let doneChecks = 0;
     Object.values(checklistItems).forEach((arr) =>
