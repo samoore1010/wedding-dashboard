@@ -264,15 +264,15 @@ function FieldRow({
   bold?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between border-b border-border/60 py-1.5">
-      <span className="text-xs font-medium text-muted min-w-[110px]">{label}</span>
-      <div className="flex-1">
+    <div className="flex items-center justify-between gap-2 border-b border-border/60 py-1.5">
+      <span className="text-xs font-medium text-muted min-w-[96px] shrink-0 sm:min-w-[110px]">{label}</span>
+      <div className="flex-1 min-w-0">
         <EditableText
           value={value}
           onChange={onChange}
           placeholder={placeholder}
           align="right"
-          className={cn('text-sm', bold && 'font-bold')}
+          className={cn('text-sm break-words', bold && 'font-bold')}
         />
       </div>
     </div>
