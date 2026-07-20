@@ -18,7 +18,7 @@ export function Header({ onOpenSettings, onOpenMobileNav }: HeaderProps) {
     : 'Set your wedding date in Settings';
 
   return (
-    <header className="relative overflow-hidden bg-gradient-to-br from-primary via-primary-soft to-accent text-white">
+    <header className="no-print relative overflow-hidden bg-gradient-to-br from-primary via-primary-soft to-accent text-white">
       <div className="absolute inset-0 opacity-30 pointer-events-none">
         <div className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.15)_0%,transparent_60%)]" />
       </div>

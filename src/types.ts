@@ -148,6 +148,52 @@ export interface Venue {
   favorite: boolean;
 }
 
+// ---- Venue plan (single chosen venue) ----------------------------------
+export type Audience = 'guest' | 'internal';
+
+/** One labeled piece of venue info. `audience` decides if it exports to guests. */
+export interface VenueField {
+  id: string;
+  label: string;
+  value: string;
+  audience: Audience;
+  /** Render full-width in the editor (for longer values). */
+  span?: boolean;
+}
+
+/** A nearby hotel / lodging option for guests. */
+export interface VenueHotel {
+  id: string;
+  name: string;
+  distance: string;
+  price: string;
+  phone: string;
+  link: string;
+  blockCode: string;
+}
+
+export type VenueSectionKind = 'fields' | 'hotels' | 'weekend';
+
+/** A section/category in the venue plan. Fully user-editable (add/rename/delete). */
+export interface VenueSection {
+  id: string;
+  icon: string;
+  title: string;
+  kind: VenueSectionKind;
+  fields: VenueField[];
+  /** Present when kind === 'hotels'. */
+  hotels?: VenueHotel[];
+}
+
+/**
+ * The venue planning hub. Not a fixed schema — a list of sections the user can
+ * reshape freely. The guest guide exports whatever is tagged `guest`.
+ */
+export interface VenuePlan {
+  venueName: string;
+  sections: VenueSection[];
+}
+
 export interface HoneymoonDay {
   id: string;
   day: number;
@@ -189,7 +235,10 @@ export interface AppState {
   registryCats: Record<string, RegistryItem[]>;
   registryChecked: Record<string, boolean>;
   giftTracker: Gift[];
+  /** Archived multi-venue comparison (pre-decision). Retained, not surfaced. */
   venues: Venue[];
+  /** The active venue planning hub + guest-guide source. */
+  venuePlan: VenuePlan;
   honeymoonDays: HoneymoonDay[];
   notes: string;
   honeymoonNotes: string;

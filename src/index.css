@@ -135,4 +135,12 @@ body {
   .no-print { display: none !important; }
   .print-block { display: block !important; }
   body { background: white; }
+  /* Guest guide prints edge-to-edge with no app chrome or card shadow. */
+  .venue-guide {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: none !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
 }
