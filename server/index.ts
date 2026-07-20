@@ -144,6 +144,9 @@ app.post('/api/assistant', async (c) => {
         tool_choice: body.tool_choice,
         thinking: body.thinking,
         output_config: body.output_config,
+        // Web search/fetch run in a server-side code-execution container;
+        // its id must be echoed back on later turns of the same conversation.
+        ...(body.container ? { container: body.container } : {}),
       } as any);
 
       s.on('text', (t: string) => send({ type: 'delta', text: t }));

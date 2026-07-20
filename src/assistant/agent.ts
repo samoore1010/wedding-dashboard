@@ -80,6 +80,9 @@ export async function runAgent(
   messages.push({ role: 'user', content: userContent });
 
   const tools = [...anthropicToolDefs(), ...WEB_TOOLS];
+  // Once web search/fetch spins up a code-execution container, its id must be
+  // sent on every later turn of this conversation, or the API returns 400.
+  let container: string | undefined;
 
   for (let step = 0; step < MAX_STEPS; step++) {
     cb.onTurnStart();
@@ -94,10 +97,12 @@ export async function runAgent(
           system: buildSystemPrompt(),
           messages,
           tools,
+          ...(container ? { container } : {}),
         },
         { onDelta: cb.onDelta, signal }
       );
       message = res.message;
+      if (message?.container?.id) container = message.container.id;
     } catch (e: any) {
       cb.onTurnEnd();
       if (e?.name === 'AbortError') return;
