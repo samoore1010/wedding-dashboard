@@ -319,7 +319,7 @@ export const DEFAULT_STATE: AppState = {
   budgetTotal: 35000,
   budgetCats: DEFAULT_BUDGET_CATS,
   budgetSpent: {},
-  guests: [],
+  households: [],
   checklist: {},
   checklistItems: Object.fromEntries(
     Object.entries(DEFAULT_CHECKLIST).map(([phase, items]) => [

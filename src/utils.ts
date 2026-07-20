@@ -60,3 +60,31 @@ export const downloadJson = (data: unknown, filename: string) => {
 
 export const cn = (...classes: Array<string | false | null | undefined>) =>
   classes.filter(Boolean).join(' ');
+
+// ---- Guest helpers ------------------------------------------------------
+import type { Household, Member } from './types';
+
+/** People in a household (party size). Derived, never stored. */
+export const householdSize = (h: Household) => h.members.length;
+
+/** Members whose RSVP is no longer pending. */
+export const repliedCount = (h: Household) =>
+  h.members.filter((m) => m.rsvp !== 'Waiting').length;
+
+/**
+ * Suggest a household label from its members' names — "The Smith Family" when
+ * everyone shares a surname, otherwise the names joined. Falls back to ''.
+ */
+export const suggestLabel = (members: Member[]): string => {
+  const names = members.map((m) => m.name.trim()).filter(Boolean);
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0];
+  const surnames = names.map((n) => n.split(/\s+/).slice(-1)[0].toLowerCase());
+  const allSame = surnames.every((s) => s === surnames[0]);
+  if (allSame) {
+    const last = names[0].split(/\s+/).slice(-1)[0];
+    return `The ${last} Family`;
+  }
+  if (names.length === 2) return `${names[0]} & ${names[1]}`;
+  return `${names[0]} & ${names.length - 1} others`;
+};
