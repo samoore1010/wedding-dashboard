@@ -41,9 +41,9 @@ const TABS: { id: TabId; label: string; icon: any }[] = [
 ];
 
 export function Nav({ active, onChange, mobileOpen, onMobileClose }: NavProps) {
-  const { guests, vendors, venues, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard } =
+  const { households, vendors, venues, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard } =
     useShallowStore((s) => ({
-      guests: s.guests,
+      households: s.households,
       vendors: s.vendors,
       venues: s.venues,
       checklistItems: s.checklistItems,
@@ -55,7 +55,7 @@ export function Nav({ active, onChange, mobileOpen, onMobileClose }: NavProps) {
     }));
 
   const badges = useMemo(() => {
-    const guestCount = guests.reduce((s, g) => s + (Number(g.qty) || 1), 0);
+    const guestCount = households.reduce((s, h) => s + h.members.length, 0);
     let totalChecks = 0;
     let doneChecks = 0;
     Object.values(checklistItems).forEach((arr) =>
@@ -78,7 +78,7 @@ export function Nav({ active, onChange, mobileOpen, onMobileClose }: NavProps) {
       registry: totalReg ? `${purchasedReg}/${totalReg}` : null,
       gifts: giftsToThank > 0 ? giftsToThank : null,
     } as Record<string, string | number | null>;
-  }, [guests, vendors, venues, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard]);
+  }, [households, vendors, venues, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard]);
 
   // close mobile drawer when tab changes via Escape
   useEffect(() => {

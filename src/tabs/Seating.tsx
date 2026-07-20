@@ -9,15 +9,23 @@ import { EditableText } from '../components/ui/EditableText';
 import { IconButton } from '../components/ui/IconButton';
 import { confirmAction } from '../components/ui/ConfirmDialog';
 import { cn } from '../utils';
-import type { Guest, SeatingTable } from '../types';
+import type { Household, SeatingTable } from '../types';
+
+/** Best display name for a household chip: explicit label, else member names. */
+const householdName = (h: Household) =>
+  h.label.trim() ||
+  h.members.map((m) => m.name).filter(Boolean).join(', ') ||
+  'Unnamed';
+const isNamed = (h: Household) =>
+  !!(h.label.trim() || h.members.some((m) => m.name.trim()));
 
 type DragSource = { guestId: string; from: string | null }; // null = unseated panel
 
 export function Seating() {
-  const { seating, guests, addTable, updateTable, removeTable, setGuestTable } = useShallowStore(
+  const { seating, households, addTable, updateTable, removeTable, setGuestTable } = useShallowStore(
     (s) => ({
       seating: s.seating,
-      guests: s.guests,
+      households: s.households,
       addTable: s.addTable,
       updateTable: s.updateTable,
       removeTable: s.removeTable,
@@ -29,7 +37,10 @@ export function Seating() {
   const [search, setSearch] = useState('');
   const [unseatedDragOver, setUnseatedDragOver] = useState(false);
 
-  const guestById = useMemo(() => new Map(guests.map((g) => [g.id, g])), [guests]);
+  const guestById = useMemo(
+    () => new Map(households.map((h) => [h.id, h])),
+    [households]
+  );
 
   const seatedIds = useMemo(() => {
     const set = new Set<string>();
@@ -37,17 +48,19 @@ export function Seating() {
     return set;
   }, [seating]);
 
+  const namedHouseholds = useMemo(() => households.filter(isNamed), [households]);
+
   const unseatedGuests = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return guests
-      .filter((g) => g.name && !seatedIds.has(g.id))
-      .filter((g) => !q || g.name.toLowerCase().includes(q));
-  }, [guests, seatedIds, search]);
+    return namedHouseholds
+      .filter((h) => !seatedIds.has(h.id))
+      .filter((h) => !q || householdName(h).toLowerCase().includes(q));
+  }, [namedHouseholds, seatedIds, search]);
 
-  const totalPeople = guests.reduce((s, g) => s + (Number(g.qty) || 1), 0);
-  const seatedPeople = guests
-    .filter((g) => seatedIds.has(g.id))
-    .reduce((s, g) => s + (Number(g.qty) || 1), 0);
+  const totalPeople = households.reduce((s, h) => s + h.members.length, 0);
+  const seatedPeople = households
+    .filter((h) => seatedIds.has(h.id))
+    .reduce((s, h) => s + h.members.length, 0);
 
   const onDragStart = (src: DragSource) => setDrag(src);
   const onDragEnd = () => setDrag(null);
@@ -80,17 +93,16 @@ export function Seating() {
         title="Unseated Guests"
         action={
           <div className="text-xs text-muted">
-            {unseatedGuests.length} of{' '}
-            {guests.filter((g) => g.name).length} unseated
+            {unseatedGuests.length} of {namedHouseholds.length} unseated
           </div>
         }
       >
         <p className="text-xs text-muted mb-3">
-          Drag a guest to a table below. Each guest takes up{' '}
-          <span className="font-semibold">party size</span> seats. Drop back here to unseat.
+          Drag a household to a table below. Each household takes up{' '}
+          <span className="font-semibold">its party size</span> in seats. Drop back here to unseat.
         </p>
 
-        {guests.filter((g) => g.name).length > 0 && (
+        {namedHouseholds.length > 0 && (
           <div className="relative max-w-sm mb-3">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <Input
@@ -118,7 +130,7 @@ export function Seating() {
               : 'border-transparent'
           )}
         >
-          {guests.filter((g) => g.name).length === 0 ? (
+          {namedHouseholds.length === 0 ? (
             <div className="flex items-center justify-center text-sm text-muted py-4 gap-2">
               <Users size={14} /> No guests yet — add some in the Guests tab.
             </div>
@@ -128,13 +140,13 @@ export function Seating() {
             </div>
           ) : (
             <div className="flex flex-wrap gap-1.5">
-              {unseatedGuests.map((g) => (
+              {unseatedGuests.map((h) => (
                 <GuestChip
-                  key={g.id}
-                  guest={g}
-                  onDragStart={() => onDragStart({ guestId: g.id, from: null })}
+                  key={h.id}
+                  household={h}
+                  onDragStart={() => onDragStart({ guestId: h.id, from: null })}
                   onDragEnd={onDragEnd}
-                  isDragging={drag?.guestId === g.id}
+                  isDragging={drag?.guestId === h.id}
                 />
               ))}
             </div>
@@ -186,24 +198,24 @@ export function Seating() {
 }
 
 function GuestChip({
-  guest,
+  household,
   onDragStart,
   onDragEnd,
   isDragging,
   onRemove,
   compact,
 }: {
-  guest: Guest;
+  household: Household;
   onDragStart: () => void;
   onDragEnd: () => void;
   isDragging?: boolean;
   onRemove?: () => void;
   compact?: boolean;
 }) {
-  const companions = (guest.companions ?? []).filter(Boolean);
-  const partySize = Number(guest.qty) || 1;
-  const allNames = [guest.name, ...companions].filter(Boolean);
-  const tooltip = allNames.length > 1 ? allNames.join(', ') : undefined;
+  const name = householdName(household);
+  const partySize = household.members.length;
+  const memberNames = household.members.map((m) => m.name).filter(Boolean);
+  const tooltip = memberNames.length > 1 ? memberNames.join(', ') : undefined;
 
   return (
     <div
@@ -217,7 +229,7 @@ function GuestChip({
         isDragging && 'opacity-40 ring-2 ring-accent/40'
       )}
     >
-      <span className="font-medium truncate max-w-[160px]">{guest.name}</span>
+      <span className="font-medium truncate max-w-[160px]">{name}</span>
       {partySize > 1 && (
         <span className="text-[10px] font-bold tabular-nums bg-accent/15 text-accent px-1.5 py-0.5 rounded-full">
           ×{partySize}
@@ -228,7 +240,7 @@ function GuestChip({
           type="button"
           onClick={onRemove}
           className="text-muted hover:text-danger opacity-60 group-hover:opacity-100 transition-opacity ml-0.5"
-          aria-label={`Unseat ${guest.name}`}
+          aria-label={`Unseat ${name}`}
         >
           <Trash2 size={11} />
         </button>
@@ -252,7 +264,7 @@ function TableCard({
   onUnseatGuest,
 }: {
   table: SeatingTable;
-  guestById: Map<string, Guest>;
+  guestById: Map<string, Household>;
   dragOver: boolean;
   onRename: (n: string) => void;
   onCapacity: (n: number) => void;
@@ -267,9 +279,9 @@ function TableCard({
   const [hovered, setHovered] = useState(false);
   const seatedGuests = (table.guestIds ?? [])
     .map((id) => guestById.get(id))
-    .filter((g): g is Guest => !!g);
+    .filter((h): h is Household => !!h);
   const cap = table.capacity ?? (table.type === 'sweetheart' ? 2 : 8);
-  const peopleCount = seatedGuests.reduce((s, g) => s + (Number(g.qty) || 1), 0);
+  const peopleCount = seatedGuests.reduce((s, h) => s + h.members.length, 0);
   const over = peopleCount > cap;
   const tableIcon =
     table.type === 'sweetheart' ? (
@@ -354,14 +366,14 @@ function TableCard({
           </div>
         ) : (
           <div className="flex flex-wrap gap-1.5">
-            {seatedGuests.map((g) => (
+            {seatedGuests.map((h) => (
               <GuestChip
-                key={g.id}
-                guest={g}
-                onDragStart={() => onDragStartGuest(g.id)}
+                key={h.id}
+                household={h}
+                onDragStart={() => onDragStartGuest(h.id)}
                 onDragEnd={onDragEndGuest}
-                isDragging={dragSource?.guestId === g.id}
-                onRemove={() => onUnseatGuest(g.id)}
+                isDragging={dragSource?.guestId === h.id}
+                onRemove={() => onUnseatGuest(h.id)}
                 compact
               />
             ))}

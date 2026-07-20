@@ -5,7 +5,8 @@ import { cloudStorage, isCloudMode } from './cloudStorage';
 import type {
   AppState,
   Gift,
-  Guest,
+  Household,
+  Member,
   HoneymoonDay,
   MoodBoardItem,
   RegistryItem,
@@ -17,9 +18,20 @@ import type {
   WeddingSettings,
   BudgetCategory,
   ChecklistItem,
+  GuestStatus,
 } from './types';
 import { DEFAULT_STATE } from './defaults';
 import { uid } from './utils';
+
+const makeMember = (patch?: Partial<Member>): Member => ({
+  id: 'm_' + uid(),
+  name: '',
+  kind: 'adult',
+  rsvp: 'Waiting',
+  meal: '',
+  dietary: '',
+  ...patch,
+});
 
 interface Actions {
   // Settings
@@ -32,10 +44,13 @@ interface Actions {
   removeBudgetCat: (id: string) => void;
   setBudgetSpent: (id: string, value: number) => void;
 
-  // Guests
-  addGuest: (guest?: Partial<Guest>) => void;
-  updateGuest: (id: string, patch: Partial<Guest>) => void;
-  removeGuest: (id: string) => void;
+  // Guests (households of members)
+  addHousehold: (household?: Partial<Household>) => string;
+  updateHousehold: (id: string, patch: Partial<Household>) => void;
+  removeHousehold: (id: string) => void;
+  addMember: (householdId: string, member?: Partial<Member>) => void;
+  updateMember: (householdId: string, memberId: string, patch: Partial<Member>) => void;
+  removeMember: (householdId: string, memberId: string) => void;
 
   // Checklist
   toggleCheck: (id: string, value?: boolean) => void;
@@ -54,7 +69,7 @@ interface Actions {
   addTable: (t?: Partial<SeatingTable>) => void;
   updateTable: (id: string, patch: Partial<SeatingTable>) => void;
   removeTable: (id: string) => void;
-  /** Move a guest to a table (or unseat with tableId=null). Keeps Guest.table in sync. */
+  /** Seat a household at a table (or unseat with tableId=null). Keeps Household.table in sync. */
   setGuestTable: (guestId: string, tableId: string | null) => void;
 
   // Run of Show
@@ -142,36 +157,68 @@ export const useStore = create<AppState & Actions>()(
       setBudgetSpent: (id, value) =>
         set((s) => ({ budgetSpent: { ...s.budgetSpent, [id]: value } })),
 
-      addGuest: (guest) =>
+      addHousehold: (household) => {
+        const id = 'g_' + uid();
         set((s) => ({
-          guests: [
-            ...s.guests,
+          households: [
+            ...s.households,
             {
-              id: 'g_' + uid(),
-              name: '',
+              id,
+              label: '',
               group: 'Couple Friends',
               side: 'Both',
-              status: 'Waiting',
-              qty: 1,
-              meal: '',
-              table: '',
+              email: '',
+              address: '',
+              inviteSent: false,
               notes: '',
-              companions: [],
-              ...guest,
+              table: '',
+              members: [makeMember()],
+              ...household,
             },
           ],
-        })),
-      updateGuest: (id, patch) =>
+        }));
+        return id;
+      },
+      updateHousehold: (id, patch) =>
         set((s) => ({
-          guests: s.guests.map((g) => (g.id === id ? { ...g, ...patch } : g)),
+          households: s.households.map((h) => (h.id === id ? { ...h, ...patch } : h)),
         })),
-      removeGuest: (id) =>
+      removeHousehold: (id) =>
         set((s) => ({
-          guests: s.guests.filter((g) => g.id !== id),
+          households: s.households.filter((h) => h.id !== id),
           seating: s.seating.map((t) => ({
             ...t,
             guestIds: (t.guestIds ?? []).filter((gid) => gid !== id),
           })),
+        })),
+      addMember: (householdId, member) =>
+        set((s) => ({
+          households: s.households.map((h) =>
+            h.id === householdId
+              ? { ...h, members: [...h.members, makeMember(member)] }
+              : h
+          ),
+        })),
+      updateMember: (householdId, memberId, patch) =>
+        set((s) => ({
+          households: s.households.map((h) =>
+            h.id === householdId
+              ? {
+                  ...h,
+                  members: h.members.map((m) =>
+                    m.id === memberId ? { ...m, ...patch } : m
+                  ),
+                }
+              : h
+          ),
+        })),
+      removeMember: (householdId, memberId) =>
+        set((s) => ({
+          households: s.households.map((h) =>
+            h.id === householdId
+              ? { ...h, members: h.members.filter((m) => m.id !== memberId) }
+              : h
+          ),
         })),
 
       toggleCheck: (id, value) =>
@@ -263,11 +310,11 @@ export const useStore = create<AppState & Actions>()(
           // If the table was renamed, propagate the new name to every Guest seated there
           if (patch.name !== undefined) {
             const updated = newSeating.find((t) => t.id === id);
-            const memberIds = new Set(updated?.guestIds ?? []);
+            const seatedIds = new Set(updated?.guestIds ?? []);
             return {
               seating: newSeating,
-              guests: s.guests.map((g) =>
-                memberIds.has(g.id) ? { ...g, table: updated?.name ?? '' } : g
+              households: s.households.map((h) =>
+                seatedIds.has(h.id) ? { ...h, table: updated?.name ?? '' } : h
               ),
             };
           }
@@ -279,8 +326,8 @@ export const useStore = create<AppState & Actions>()(
           const orphaned = new Set(tbl?.guestIds ?? []);
           return {
             seating: s.seating.filter((t) => t.id !== id),
-            guests: s.guests.map((g) =>
-              orphaned.has(g.id) ? { ...g, table: '' } : g
+            households: s.households.map((h) =>
+              orphaned.has(h.id) ? { ...h, table: '' } : h
             ),
           };
         }),
@@ -303,8 +350,8 @@ export const useStore = create<AppState & Actions>()(
           }
           return {
             seating: next,
-            guests: s.guests.map((g) =>
-              g.id === guestId ? { ...g, table: tableName } : g
+            households: s.households.map((h) =>
+              h.id === guestId ? { ...h, table: tableName } : h
             ),
           };
         }),
@@ -525,7 +572,7 @@ export const useStore = create<AppState & Actions>()(
     }),
     {
       name: 'wedding-dashboard-v1',
-      version: 2,
+      version: 3,
       storage: isCloudMode()
         ? createJSONStorage(() => cloudStorage)
         : createJSONStorage(() => localStorage),
@@ -546,6 +593,43 @@ export const useStore = create<AppState & Actions>()(
             }
             return { ...t, guestIds: ids };
           });
+        }
+        // v3: flat Guest[] (party + companion name strings) -> Household[] of Members.
+        // Each old guest becomes one household; its primary name + companions become
+        // members. The household id is preserved so Seating.guestIds still resolves.
+        if (version < 3) {
+          const deriveLabel = (name: string, size: number): string => {
+            const n = (name ?? '').trim();
+            if (!n) return '';
+            const last = n.split(/\s+/).slice(-1)[0];
+            return size > 1 && last ? `The ${last} Family` : n;
+          };
+          persisted.households = (persisted.guests ?? []).map((g: any) => {
+            const status: GuestStatus = g.status ?? 'Waiting';
+            const qty = Math.max(1, Number(g.qty) || 1);
+            const companions: string[] = (g.companions ?? []).filter(
+              (c: any) => typeof c === 'string'
+            );
+            const members: Member[] = [
+              makeMember({ name: g.name ?? '', rsvp: status, meal: g.meal ?? '' }),
+            ];
+            for (let i = 0; i < qty - 1; i++) {
+              members.push(makeMember({ name: companions[i] ?? '', rsvp: status }));
+            }
+            return {
+              id: g.id ?? 'g_' + uid(),
+              label: deriveLabel(g.name ?? '', qty),
+              group: g.group ?? 'Couple Friends',
+              side: g.side ?? 'Both',
+              email: g.email ?? '',
+              address: '',
+              inviteSent: false,
+              notes: g.notes ?? '',
+              table: g.table ?? '',
+              members,
+            };
+          });
+          delete persisted.guests;
         }
         return persisted;
       },

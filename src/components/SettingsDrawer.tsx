@@ -260,7 +260,8 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
               />
             </div>
             <p className="text-xs text-muted mt-2">
-              Stored locally in your browser. {Object.keys(fullState.guests).length} guests •{' '}
+              Stored locally in your browser.{' '}
+              {fullState.households.reduce((n, h) => n + h.members.length, 0)} guests •{' '}
               {Object.keys(fullState.checklist).length} checked items.
             </p>
           </Section>

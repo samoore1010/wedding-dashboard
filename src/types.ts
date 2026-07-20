@@ -11,19 +11,39 @@ export type GuestGroup =
   | 'Work'
   | 'Other';
 
-export interface Guest {
+export type MemberKind = 'adult' | 'child';
+
+/**
+ * A single person. RSVP, meal, and dietary needs are tracked per person,
+ * because at a real wedding those answers differ within one household.
+ */
+export interface Member {
   id: string;
   name: string;
-  group: GuestGroup;
-  side: GuestSide;
-  status: GuestStatus;
-  qty: number;
+  kind: MemberKind;
+  rsvp: GuestStatus;
   meal: string;
-  table: string;
+  dietary: string;
+}
+
+/**
+ * A household is one invitation — the unit you address an envelope to and
+ * that gets seated together. It holds one or more {@link Member}s. Party size
+ * is derived from `members.length`, never stored separately.
+ */
+export interface Household {
+  id: string;
+  /** Display label, e.g. "The Smith Family" or "Jane Doe". */
+  label: string;
+  side: GuestSide;
+  group: GuestGroup;
+  email: string;
+  address: string;
+  inviteSent: boolean;
   notes: string;
-  email?: string;
-  /** Names of additional party members beyond the primary guest. Length should equal qty - 1. */
-  companions?: string[];
+  /** Name of the table this household is seated at. Synced from the Seating tab. */
+  table: string;
+  members: Member[];
 }
 
 export interface BudgetCategory {
@@ -62,7 +82,7 @@ export interface SeatingTable {
   id: string;
   name: string;
   type: 'sweetheart' | 'regular' | 'kings';
-  /** IDs of Guest records seated at this table. Each guest occupies `qty` seats. */
+  /** IDs of Household records seated at this table. Each household occupies `members.length` seats. */
   guestIds: string[];
   capacity?: number;
   /** Legacy: free-text guest names. Migrated to guestIds in v2. Do not write. */
@@ -159,7 +179,7 @@ export interface AppState {
   budgetTotal: number;
   budgetCats: BudgetCategory[];
   budgetSpent: Record<string, number>;
-  guests: Guest[];
+  households: Household[];
   checklist: Record<string, boolean>;
   checklistItems: Record<string, ChecklistItem[]>;
   vendors: Vendor[];

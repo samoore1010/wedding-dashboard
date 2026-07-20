@@ -20,9 +20,9 @@ interface OverviewProps {
 }
 
 export function Overview({ onJump }: OverviewProps) {
-  const { guests, vendors, checklistItems, checklist, budgetSpent, budgetTotal, settings, notes, setNotes } =
+  const { households, vendors, checklistItems, checklist, budgetSpent, budgetTotal, settings, notes, setNotes } =
     useShallowStore((s) => ({
-      guests: s.guests,
+      households: s.households,
       vendors: s.vendors,
       checklistItems: s.checklistItems,
       checklist: s.checklist,
@@ -33,12 +33,11 @@ export function Overview({ onJump }: OverviewProps) {
       setNotes: s.setNotes,
     }));
 
-  const total = guests.reduce((s, g) => s + (Number(g.qty) || 1), 0);
-  const yes = guests.filter((g) => g.status === 'Yes').reduce((s, g) => s + (Number(g.qty) || 1), 0);
-  const waiting = guests
-    .filter((g) => g.status === 'Waiting')
-    .reduce((s, g) => s + (Number(g.qty) || 1), 0);
-  const no = guests.filter((g) => g.status === 'No').reduce((s, g) => s + (Number(g.qty) || 1), 0);
+  const members = households.flatMap((h) => h.members);
+  const total = members.length;
+  const yes = members.filter((m) => m.rsvp === 'Yes').length;
+  const waiting = members.filter((m) => m.rsvp === 'Waiting').length;
+  const no = members.filter((m) => m.rsvp === 'No').length;
 
   let totalChecks = 0;
   let doneChecks = 0;
