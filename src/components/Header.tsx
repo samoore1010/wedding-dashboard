@@ -22,8 +22,8 @@ export function Header({ onOpenSettings, onOpenMobileNav }: HeaderProps) {
       <div className="absolute inset-0 opacity-30 pointer-events-none">
         <div className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.15)_0%,transparent_60%)]" />
       </div>
-      <div className="relative max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-12">
-        <div className="flex justify-between items-start mb-6">
+      <div className="relative max-w-6xl mx-auto px-4 md:px-6 py-5 md:py-12">
+        <div className="flex justify-between items-start mb-4 md:mb-6">
           <div className="flex items-center gap-3">
             <button
               onClick={onOpenMobileNav}
@@ -48,14 +48,14 @@ export function Header({ onOpenSettings, onOpenMobileNav }: HeaderProps) {
         </div>
 
         <div className="text-center">
-          <h1 className="font-display font-light text-4xl md:text-6xl tracking-wider">
+          <h1 className="font-display font-light text-3xl md:text-6xl tracking-wider">
             {couple}
           </h1>
           <div className="text-xs md:text-sm tracking-[0.25em] uppercase opacity-90 mt-2">
             {dateLabel}
           </div>
 
-          <div className="flex justify-center gap-6 md:gap-10 mt-6">
+          <div className="flex justify-center gap-6 md:gap-10 mt-4 md:mt-6">
             {cd.isPast ? (
               <div className="font-display text-3xl">Just Married! 🎉</div>
             ) : cd.invalid ? (
