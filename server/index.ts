@@ -166,6 +166,118 @@ app.post('/api/assistant', async (c) => {
   });
 });
 
+// --- Guest import: Google Sheets CSV proxy -------------------------------
+// The browser can't fetch docs.google.com directly (CORS), so we fetch the
+// published CSV server-side. The sheet must be link-shared as viewable.
+const SHEET_ID_RE = /^[a-zA-Z0-9-_]+$/;
+
+app.get('/api/import/gsheet', async (c) => {
+  const id = c.req.query('id') ?? '';
+  const gid = c.req.query('gid') ?? '0';
+  if (!SHEET_ID_RE.test(id) || !/^[0-9]+$/.test(gid)) {
+    return c.text('bad sheet id', 400);
+  }
+  const url = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
+  try {
+    const res = await fetch(url, { redirect: 'follow' });
+    // Google returns 200 with an HTML sign-in page for private sheets.
+    const ct = res.headers.get('content-type') || '';
+    if (!res.ok) return c.text('fetch failed', res.status === 401 || res.status === 403 ? 403 : 502);
+    if (ct.includes('text/html')) return c.text('sheet is private', 403);
+    const text = await res.text();
+    return c.body(text, 200, { 'Content-Type': 'text/csv; charset=utf-8' });
+  } catch (e) {
+    console.error('gsheet fetch failed', e);
+    return c.text('fetch failed', 502);
+  }
+});
+
+// --- Guest import: AI categorization -------------------------------------
+// Given the raw rows of an uploaded guest sheet, ask Claude to normalise and
+// categorise each person (side, relationship, list, adult/child, RSVP) and to
+// propose which people share a household. Returns strict JSON; the browser
+// groups + dedupes from there. Falls back to heuristics client-side if this is
+// unavailable.
+const IMPORT_MODEL = process.env.ASSISTANT_MODEL || 'claude-opus-4-8';
+
+app.post('/api/import/categorize', async (c) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return c.json({ error: 'not configured' }, 503);
+
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.text('invalid json', 400);
+  }
+  const records: Record<string, string>[] = Array.isArray(body?.records) ? body.records.slice(0, 400) : [];
+  if (!records.length) return c.json({ guests: [] });
+
+  const client = new Anthropic({ apiKey });
+  const tool = {
+    name: 'categorize_guests',
+    description: 'Return the normalised, categorised guest list.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        guests: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              index: { type: 'integer', description: 'The 0-based index of the source record.' },
+              name: { type: 'string', description: 'The cleaned full name of one person.' },
+              household: {
+                type: 'string',
+                description:
+                  'A label shared by everyone on the same invitation (e.g. "The Smith Family"). People with the same household value are grouped together.',
+              },
+              side: { type: 'string', enum: ['Bride', 'Groom', 'Both'] },
+              group: {
+                type: 'string',
+                enum: ['Couple Friends', 'Bride Family', 'Groom Family', 'Bride Friends', 'Groom Friends', 'Work', 'Other'],
+              },
+              list: { type: 'string', enum: ['Invited', 'B-list', 'Maybe'] },
+              kind: { type: 'string', enum: ['adult', 'child'] },
+              rsvp: { type: 'string', enum: ['Yes', 'No', 'Waiting'] },
+            },
+            required: ['index', 'name', 'household', 'side', 'group', 'list', 'kind', 'rsvp'],
+          },
+        },
+      },
+      required: ['guests'],
+    },
+  };
+
+  const system =
+    'You are cleaning up a wedding guest spreadsheet. The columns are inconsistent and may use ' +
+    'shorthand. For every PERSON (a row may contain a couple like "John & Jane" — split them into two ' +
+    'people that share one household), infer: the household they belong to (same invitation = same ' +
+    'household label), which side of the couple they belong to, the relationship category, the guest ' +
+    'list tier, whether they are an adult or child, and their RSVP status. Use every column as context, ' +
+    'including ones with unusual names. If a value is genuinely unknown, choose the most reasonable ' +
+    'default (side "Both", group "Other", list "Invited", kind "adult", rsvp "Waiting"). Return one ' +
+    'entry per person via the categorize_guests tool. The index field is the 0-based source row index.';
+
+  try {
+    const msg = await client.messages.create({
+      model: IMPORT_MODEL,
+      max_tokens: 8000,
+      system,
+      tools: [tool as any],
+      tool_choice: { type: 'tool', name: 'categorize_guests' },
+      messages: [{ role: 'user', content: JSON.stringify(records) }],
+    });
+    const block: any = msg.content.find((b: any) => b.type === 'tool_use');
+    if (!block) return c.json({ error: 'no result' }, 502);
+    return c.json(block.input);
+  } catch (e: any) {
+    const status = e?.status;
+    const message = status === 401 ? 'invalid api key' : e?.message || 'categorization failed';
+    return c.json({ error: message }, status === 401 ? 401 : 502);
+  }
+});
+
 app.get('/health', (c) => c.text('ok'));
 
 // Serve built static assets

@@ -68,6 +68,9 @@ const UNDO_DATA_KEYS = [
   'moodBoard',
 ] as const;
 
+/** Household shape accepted by bulk import — members may be bare (no id yet). */
+export type ImportHousehold = Partial<Omit<Household, 'members'>> & { members?: Partial<Member>[] };
+
 export interface UndoEntry {
   id: string;
   label: string;
@@ -102,6 +105,11 @@ interface Actions {
   addMember: (householdId: string, member?: Partial<Member>) => void;
   updateMember: (householdId: string, memberId: string, patch: Partial<Member>) => void;
   removeMember: (householdId: string, memberId: string) => void;
+  /** Bulk-import households (and optionally patch existing ones) as one undoable step. */
+  importHouseholds: (
+    toAdd: ImportHousehold[],
+    toUpdate?: { id: string; patch: Partial<Household> }[]
+  ) => void;
 
   // Checklist
   toggleCheck: (id: string, value?: boolean) => void;
@@ -333,6 +341,32 @@ export const useStore = create<AppState & Actions & UndoState>()(
             members: s.weddingParty.members.filter((m) => m.memberId !== memberId),
           },
         })),
+
+      importHouseholds: (toAdd, toUpdate = []) => {
+        get().pushUndo(`Import ${toAdd.length} ${toAdd.length === 1 ? 'household' : 'households'}`);
+        const additions: Household[] = toAdd.map((h) => ({
+          id: 'g_' + uid(),
+          label: '',
+          group: 'Couple Friends',
+          side: 'Both',
+          list: 'Invited',
+          email: '',
+          address: '',
+          inviteSent: false,
+          notes: '',
+          table: '',
+          ...h,
+          members:
+            h.members && h.members.length ? h.members.map((m) => makeMember(m)) : [makeMember()],
+        }));
+        const patches = new Map(toUpdate.map((u) => [u.id, u.patch]));
+        set((s) => ({
+          households: [
+            ...s.households.map((h) => (patches.has(h.id) ? { ...h, ...patches.get(h.id) } : h)),
+            ...additions,
+          ],
+        }));
+      },
 
       toggleCheck: (id, value) =>
         set((s) => ({
