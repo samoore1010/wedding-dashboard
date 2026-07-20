@@ -29,7 +29,7 @@ const TABS: { id: TabId; label: string; icon: any }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'budget', label: 'Budget', icon: Wallet },
   { id: 'guests', label: 'Guests', icon: Users },
-  { id: 'venues', label: 'Venues', icon: Building2 },
+  { id: 'venues', label: 'Venue', icon: Building2 },
   { id: 'moodboard', label: 'Mood Board', icon: ImageIcon },
   { id: 'checklist', label: 'Checklist', icon: CheckSquare },
   { id: 'vendors', label: 'Vendors', icon: Briefcase },
@@ -41,11 +41,10 @@ const TABS: { id: TabId; label: string; icon: any }[] = [
 ];
 
 export function Nav({ active, onChange, mobileOpen, onMobileClose }: NavProps) {
-  const { households, vendors, venues, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard } =
+  const { households, vendors, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard } =
     useShallowStore((s) => ({
       households: s.households,
       vendors: s.vendors,
-      venues: s.venues,
       checklistItems: s.checklistItems,
       checklist: s.checklist,
       registryCats: s.registryCats,
@@ -71,14 +70,13 @@ export function Nav({ active, onChange, mobileOpen, onMobileClose }: NavProps) {
 
     return {
       guests: guestCount || null,
-      venues: venues.length || null,
       moodboard: moodBoard.length || null,
       checklist: totalChecks ? `${pct(doneChecks, totalChecks)}%` : null,
       vendors: vendors.length ? `${booked}/${vendors.length}` : null,
       registry: totalReg ? `${purchasedReg}/${totalReg}` : null,
       gifts: giftsToThank > 0 ? giftsToThank : null,
     } as Record<string, string | number | null>;
-  }, [households, vendors, venues, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard]);
+  }, [households, vendors, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard]);
 
   // close mobile drawer when tab changes via Escape
   useEffect(() => {

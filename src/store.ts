@@ -14,6 +14,9 @@ import type {
   SeatingTable,
   Vendor,
   Venue,
+  VenueField,
+  VenueHotel,
+  VenueSection,
   WeekendEvent,
   WeddingSettings,
   BudgetCategory,
@@ -21,6 +24,7 @@ import type {
   GuestStatus,
 } from './types';
 import { DEFAULT_STATE } from './defaults';
+import { defaultVenuePlan, makeVenueField, makeVenueHotel, makeVenueSection } from './venuePlan';
 import { uid } from './utils';
 
 const makeMember = (patch?: Partial<Member>): Member => ({
@@ -50,6 +54,7 @@ const UNDO_DATA_KEYS = [
   'registryChecked',
   'giftTracker',
   'venues',
+  'venuePlan',
   'honeymoonDays',
   'notes',
   'honeymoonNotes',
@@ -139,11 +144,23 @@ interface Actions {
   updateGift: (id: string, patch: Partial<Gift>) => void;
   removeGift: (id: string) => void;
 
-  // Venues
+  // Venues (archived comparison)
   addVenue: () => void;
   updateVenue: (id: string, patch: Partial<Venue>) => void;
   removeVenue: (id: string) => void;
   setFavoriteVenue: (id: string) => void;
+
+  // Venue plan (active planning hub)
+  addVenueSection: (section?: Partial<VenueSection>) => void;
+  updateVenueSection: (id: string, patch: Partial<VenueSection>) => void;
+  removeVenueSection: (id: string) => void;
+  moveVenueSection: (id: string, dir: -1 | 1) => void;
+  addVenueField: (sectionId: string, field?: Partial<VenueField>) => void;
+  updateVenueField: (sectionId: string, fieldId: string, patch: Partial<VenueField>) => void;
+  removeVenueField: (sectionId: string, fieldId: string) => void;
+  addVenueHotel: (sectionId: string, hotel?: Partial<VenueHotel>) => void;
+  updateVenueHotel: (sectionId: string, hotelId: string, patch: Partial<VenueHotel>) => void;
+  removeVenueHotel: (sectionId: string, hotelId: string) => void;
 
   // Honeymoon
   addHDay: () => void;
@@ -596,6 +613,100 @@ export const useStore = create<AppState & Actions & UndoState>()(
           ),
         })),
 
+      // --- Venue plan ---
+      addVenueSection: (section) =>
+        set((s) => ({
+          venuePlan: {
+            ...s.venuePlan,
+            sections: [...s.venuePlan.sections, makeVenueSection({ fields: [makeVenueField()], ...section })],
+          },
+        })),
+      updateVenueSection: (id, patch) =>
+        set((s) => ({
+          venuePlan: {
+            ...s.venuePlan,
+            sections: s.venuePlan.sections.map((sec) => (sec.id === id ? { ...sec, ...patch } : sec)),
+          },
+        })),
+      removeVenueSection: (id) =>
+        set((s) => ({
+          venuePlan: {
+            ...s.venuePlan,
+            sections: s.venuePlan.sections.filter((sec) => sec.id !== id),
+          },
+        })),
+      moveVenueSection: (id, dir) =>
+        set((s) => {
+          const secs = [...s.venuePlan.sections];
+          const i = secs.findIndex((x) => x.id === id);
+          const j = i + dir;
+          if (i < 0 || j < 0 || j >= secs.length) return {} as any;
+          [secs[i], secs[j]] = [secs[j], secs[i]];
+          return { venuePlan: { ...s.venuePlan, sections: secs } };
+        }),
+      addVenueField: (sectionId, field) =>
+        set((s) => ({
+          venuePlan: {
+            ...s.venuePlan,
+            sections: s.venuePlan.sections.map((sec) =>
+              sec.id === sectionId ? { ...sec, fields: [...sec.fields, makeVenueField(field)] } : sec
+            ),
+          },
+        })),
+      updateVenueField: (sectionId, fieldId, patch) =>
+        set((s) => ({
+          venuePlan: {
+            ...s.venuePlan,
+            sections: s.venuePlan.sections.map((sec) =>
+              sec.id === sectionId
+                ? { ...sec, fields: sec.fields.map((f) => (f.id === fieldId ? { ...f, ...patch } : f)) }
+                : sec
+            ),
+          },
+        })),
+      removeVenueField: (sectionId, fieldId) =>
+        set((s) => ({
+          venuePlan: {
+            ...s.venuePlan,
+            sections: s.venuePlan.sections.map((sec) =>
+              sec.id === sectionId ? { ...sec, fields: sec.fields.filter((f) => f.id !== fieldId) } : sec
+            ),
+          },
+        })),
+      addVenueHotel: (sectionId, hotel) =>
+        set((s) => ({
+          venuePlan: {
+            ...s.venuePlan,
+            sections: s.venuePlan.sections.map((sec) =>
+              sec.id === sectionId
+                ? { ...sec, hotels: [...(sec.hotels ?? []), makeVenueHotel(hotel)] }
+                : sec
+            ),
+          },
+        })),
+      updateVenueHotel: (sectionId, hotelId, patch) =>
+        set((s) => ({
+          venuePlan: {
+            ...s.venuePlan,
+            sections: s.venuePlan.sections.map((sec) =>
+              sec.id === sectionId
+                ? { ...sec, hotels: (sec.hotels ?? []).map((h) => (h.id === hotelId ? { ...h, ...patch } : h)) }
+                : sec
+            ),
+          },
+        })),
+      removeVenueHotel: (sectionId, hotelId) =>
+        set((s) => ({
+          venuePlan: {
+            ...s.venuePlan,
+            sections: s.venuePlan.sections.map((sec) =>
+              sec.id === sectionId
+                ? { ...sec, hotels: (sec.hotels ?? []).filter((h) => h.id !== hotelId) }
+                : sec
+            ),
+          },
+        })),
+
       addHDay: () =>
         set((s) => ({
           honeymoonDays: [
@@ -645,7 +756,7 @@ export const useStore = create<AppState & Actions & UndoState>()(
     }),
     {
       name: 'wedding-dashboard-v1',
-      version: 3,
+      version: 4,
       // Undo history is session-only — never sync it to the server/localStorage.
       partialize: (s) => {
         const { undoStack: _u, ...rest } = s as any;
@@ -708,6 +819,13 @@ export const useStore = create<AppState & Actions & UndoState>()(
             };
           });
           delete persisted.guests;
+        }
+        // v4: seed the venue planning hub from the chosen (favorite) venue.
+        // The old `venues` comparison array is kept, just no longer surfaced.
+        if (version < 4 && !persisted.venuePlan) {
+          const vs = persisted.venues ?? [];
+          const chosen = vs.find((v: any) => v?.favorite) || vs[0];
+          persisted.venuePlan = defaultVenuePlan(chosen);
         }
         return persisted;
       },

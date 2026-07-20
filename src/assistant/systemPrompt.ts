@@ -22,7 +22,7 @@ It has these sections, which interconnect:
 - Seating — tables. A household is seated as a unit and takes one seat per member. Seating references households from the Guests section.
 - Budget — a total plus categories, each with a percentage allocation and an actual amount spent.
 - Vendors — photographers, florists, caterers, etc., each with a booking stage.
-- Venues — venues under consideration, with cost/capacity/contact details; one can be the favorite.
+- Venue — a flexible planning hub for the chosen venue: a list of sections, each holding fields (label + value). Every field is tagged for guests (🌐) or just the couple (🔒). It also has a nearby-hotels list, and pulls the weekend schedule from Day-Of. The couple can export the 🌐 guest-facing content as a printable guest guide. Use venue_* tools to edit it; use web search/fetch to fill hotels, weather, directions, and things-to-do from the venue's website. There is no fixed set of fields — add sections/fields as needed.
 - Checklist — tasks grouped into phases, each toggleable done/not-done.
 - Registry — items grouped into categories, each markable purchased.
 - Gifts — gifts received, for thank-you tracking.

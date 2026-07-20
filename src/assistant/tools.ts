@@ -12,6 +12,8 @@ import type {
   MemberKind,
   VendorStage,
   SeatingTable,
+  Audience,
+  VenueSection,
 } from '../types';
 
 export type ToolKind = 'read' | 'write';
@@ -101,7 +103,7 @@ export const TOOLS: AssistantTool[] = [
           'budget',
           'vendors',
           'seating',
-          'venues',
+          'venue',
           'checklist',
           'registry',
           'gifts',
@@ -479,92 +481,172 @@ export const TOOLS: AssistantTool[] = [
     },
   },
 
-  // ---------------------------------------------------------------- venues
+  // ---------------------------------------------------------------- venue plan
+  // The venue plan is a flexible list of sections; each section has fields
+  // (label + value + audience: guest|internal). Call get_dashboard('venue')
+  // first to get section/field ids. Web search/fetch is ideal for filling
+  // hotels, weather, directions, and things-to-do from the venue's website.
   {
-    name: 'add_venue',
+    name: 'venue_add_section',
     kind: 'write',
-    description:
-      'Add a venue under consideration. Fill in whatever details you have — this is ideal for ' +
-      'saving details pulled from a venue website via web_fetch/web_search.',
+    description: 'Add a new section/category to the venue plan (e.g. "Transportation", "Childcare").',
     input_schema: obj(
       {
-        name: str('Venue name'),
-        location: str('City / area'),
-        type: str('e.g. Barn, Ballroom, Winery'),
-        capacity: str('Guest capacity'),
-        fee: str('Site/rental fee'),
-        perPlate: str('Per-plate catering cost'),
-        totalCost: str('Estimated total cost'),
-        contact: str('Contact info'),
-        website: str('Website URL'),
-        pros: str(),
-        cons: str(),
-        notes: str(),
+        title: str('Section title'),
+        icon: str('An emoji icon'),
+        fields: {
+          type: 'array',
+          description: 'Optional initial fields',
+          items: obj(
+            { label: str(), value: str(), audience: enumStr(['guest', 'internal']) },
+            ['label']
+          ),
+        },
+      },
+      ['title']
+    ),
+    summarize: (i) => `Add venue section "${i.title}"`,
+    run: (i) => {
+      const before = S().venuePlan.sections;
+      S().addVenueSection({ title: i.title, icon: (i.icon || '✨').slice(0, 2), fields: [] });
+      const sec = created(before, S().venuePlan.sections);
+      if (sec && Array.isArray(i.fields)) {
+        for (const f of i.fields)
+          S().addVenueField(sec.id, {
+            label: f.label,
+            value: f.value || '',
+            audience: (f.audience as Audience) || 'guest',
+          });
+      }
+      return `Added section "${i.title}".`;
+    },
+  },
+  {
+    name: 'venue_update_section',
+    kind: 'write',
+    description: 'Rename a venue section or change its icon.',
+    input_schema: obj({ sectionId: str(), title: str(), icon: str() }, ['sectionId']),
+    summarize: (i) => `Update venue section ${venueSectionLabel(i.sectionId)}`,
+    run: (i) => {
+      requireVenueSection(i.sectionId);
+      S().updateVenueSection(i.sectionId, clean({ title: i.title, icon: i.icon?.slice(0, 2) }));
+      return `Updated section ${venueSectionLabel(i.sectionId)}.`;
+    },
+  },
+  {
+    name: 'venue_remove_section',
+    kind: 'write',
+    description: 'Delete a venue section and its fields.',
+    input_schema: obj({ sectionId: str() }, ['sectionId']),
+    summarize: (i) => `Delete venue section ${venueSectionLabel(i.sectionId)}`,
+    run: (i) => {
+      const name = venueSectionLabel(i.sectionId);
+      requireVenueSection(i.sectionId);
+      S().removeVenueSection(i.sectionId);
+      return `Removed section ${name}.`;
+    },
+  },
+  {
+    name: 'venue_add_field',
+    kind: 'write',
+    description: 'Add a field (a labeled detail) to a venue section. Tag it guest or internal.',
+    input_schema: obj(
+      {
+        sectionId: str('Section id from get_dashboard'),
+        label: str('Field label'),
+        value: str('Field value'),
+        audience: enumStr(['guest', 'internal'], 'Who sees it (default guest)'),
+      },
+      ['sectionId', 'label']
+    ),
+    summarize: (i) =>
+      `Add ${i.audience === 'internal' ? '🔒' : '🌐'} "${i.label}" to ${venueSectionLabel(i.sectionId)}`,
+    run: (i) => {
+      requireVenueSection(i.sectionId);
+      S().addVenueField(i.sectionId, {
+        label: i.label,
+        value: i.value || '',
+        audience: (i.audience as Audience) || 'guest',
+      });
+      return `Added "${i.label}".`;
+    },
+  },
+  {
+    name: 'venue_update_field',
+    kind: 'write',
+    description:
+      "Update a venue field's label, value, or audience. Set audience to 'guest' to include it in " +
+      "the guest guide, or 'internal' to keep it private.",
+    input_schema: obj(
+      {
+        sectionId: str(),
+        fieldId: str(),
+        label: str(),
+        value: str(),
+        audience: enumStr(['guest', 'internal']),
+      },
+      ['sectionId', 'fieldId']
+    ),
+    summarize: (i) => `Update venue field ${venueFieldLabel(i.sectionId, i.fieldId)}`,
+    run: (i) => {
+      requireVenueField(i.sectionId, i.fieldId);
+      S().updateVenueField(
+        i.sectionId,
+        i.fieldId,
+        clean({ label: i.label, value: i.value, audience: i.audience })
+      );
+      return `Updated field.`;
+    },
+  },
+  {
+    name: 'venue_remove_field',
+    kind: 'write',
+    description: 'Remove a field from a venue section.',
+    input_schema: obj({ sectionId: str(), fieldId: str() }, ['sectionId', 'fieldId']),
+    summarize: (i) => `Remove venue field ${venueFieldLabel(i.sectionId, i.fieldId)}`,
+    run: (i) => {
+      requireVenueField(i.sectionId, i.fieldId);
+      S().removeVenueField(i.sectionId, i.fieldId);
+      return `Removed field.`;
+    },
+  },
+  {
+    name: 'venue_add_hotel',
+    kind: 'write',
+    description:
+      'Add a nearby hotel/lodging option for guests. Great for saving results from web search. ' +
+      'Adds to the "Where to stay" section automatically.',
+    input_schema: obj(
+      {
+        name: str('Hotel name'),
+        distance: str('Distance/time from venue'),
+        price: str('Price per night'),
+        phone: str(),
+        link: str('Booking URL'),
+        blockCode: str('Room-block code, if any'),
       },
       ['name']
     ),
-    summarize: (i) => `Add venue "${i.name}"${i.location ? ` — ${i.location}` : ''}`,
+    summarize: (i) => `Add hotel "${i.name}" to Where to stay`,
     run: (i) => {
-      const before = S().venues;
-      S().addVenue();
-      const v = created(before, S().venues);
-      if (v) S().updateVenue(v.id, clean(i));
-      return `Added venue "${i.name}".`;
+      const sec = hotelsSection();
+      if (!sec) throw new Error('No hotels section exists. Add a section with a hotels list first.');
+      S().addVenueHotel(sec.id, clean(i));
+      return `Added hotel "${i.name}".`;
     },
   },
   {
-    name: 'update_venue',
+    name: 'venue_remove_hotel',
     kind: 'write',
-    description: 'Update details on a saved venue.',
-    input_schema: obj(
-      {
-        id: str(),
-        name: str(),
-        location: str(),
-        type: str(),
-        capacity: str(),
-        fee: str(),
-        perPlate: str(),
-        totalCost: str(),
-        contact: str(),
-        website: str(),
-        pros: str(),
-        cons: str(),
-        notes: str(),
-      },
-      ['id']
-    ),
-    summarize: (i) => `Update venue ${label('venues', i.id)}`,
+    description: 'Remove a hotel from the Where-to-stay list.',
+    input_schema: obj({ hotelId: str() }, ['hotelId']),
+    summarize: (i) => `Remove hotel ${venueHotelLabel(i.hotelId)}`,
     run: (i) => {
-      requireEntity('venues', i.id);
-      const { id, ...patch } = i;
-      S().updateVenue(id, clean(patch));
-      return `Updated venue "${label('venues', id)}".`;
-    },
-  },
-  {
-    name: 'delete_venue',
-    kind: 'write',
-    description: 'Remove a venue from consideration.',
-    input_schema: obj({ id: str() }, ['id']),
-    summarize: (i) => `Delete venue ${label('venues', i.id)}`,
-    run: (i) => {
-      const name = label('venues', i.id);
-      requireEntity('venues', i.id);
-      S().removeVenue(i.id);
-      return `Removed venue "${name}".`;
-    },
-  },
-  {
-    name: 'set_favorite_venue',
-    kind: 'write',
-    description: 'Mark a venue as the favorite (clears other favorites).',
-    input_schema: obj({ id: str() }, ['id']),
-    summarize: (i) => `Mark ${label('venues', i.id)} as favorite venue`,
-    run: (i) => {
-      requireEntity('venues', i.id);
-      S().setFavoriteVenue(i.id);
-      return `Marked "${label('venues', i.id)}" as favorite.`;
+      const sec = hotelsSection();
+      if (!sec) throw new Error('No hotels section.');
+      const name = venueHotelLabel(i.hotelId);
+      S().removeVenueHotel(sec.id, i.hotelId);
+      return `Removed hotel ${name}.`;
     },
   },
 
@@ -864,6 +946,36 @@ function memberLabel(householdId: string, memberId: string): string {
   return m ? `"${m.name || 'unnamed'}"` : `"${memberId}"`;
 }
 
+// ---- venue-plan helpers ----
+function venueSection(id: string): VenueSection | undefined {
+  return S().venuePlan.sections.find((s) => s.id === id);
+}
+function hotelsSection(): VenueSection | undefined {
+  return S().venuePlan.sections.find((s) => s.kind === 'hotels');
+}
+function requireVenueSection(id: string) {
+  if (!venueSection(id)) throw new Error(`No venue section "${id}". Call get_dashboard("venue") for ids.`);
+}
+function requireVenueField(sectionId: string, fieldId: string) {
+  const sec = venueSection(sectionId);
+  if (!sec) throw new Error(`No venue section "${sectionId}".`);
+  if (!sec.fields.some((f) => f.id === fieldId)) throw new Error(`No field "${fieldId}" in that section.`);
+}
+function venueSectionLabel(id: string): string {
+  return `"${venueSection(id)?.title ?? id}"`;
+}
+function venueFieldLabel(sectionId: string, fieldId: string): string {
+  const f = venueSection(sectionId)?.fields.find((x) => x.id === fieldId);
+  return `"${f?.label ?? fieldId}"`;
+}
+function venueHotelLabel(hotelId: string): string {
+  for (const s of S().venuePlan.sections) {
+    const h = (s.hotels ?? []).find((x) => x.id === hotelId);
+    if (h) return `"${h.name || hotelId}"`;
+  }
+  return `"${hotelId}"`;
+}
+
 // ---- dashboard reads ----------------------------------------------------
 
 function readSection(section: string): unknown {
@@ -919,8 +1031,24 @@ function readSection(section: string): unknown {
           .filter((h) => (h.label || h.members.some((m) => m.name)) && !s.seating.some((t) => (t.guestIds ?? []).includes(h.id)))
           .map((h) => ({ id: h.id, label: h.label, size: h.members.length })),
       };
-    case 'venues':
-      return { venues: s.venues };
+    case 'venue':
+      return {
+        venueName: s.venuePlan.venueName,
+        sections: s.venuePlan.sections.map((sec) => ({
+          id: sec.id,
+          title: sec.title,
+          icon: sec.icon,
+          kind: sec.kind,
+          fields: sec.fields.map((f) => ({
+            id: f.id,
+            label: f.label,
+            value: f.value,
+            audience: f.audience,
+          })),
+          ...(sec.kind === 'hotels' ? { hotels: sec.hotels ?? [] } : {}),
+        })),
+        weekendSchedule: s.weekend.map((w) => ({ day: w.day, event: w.event, time: w.time })),
+      };
     case 'checklist':
       return {
         phases: Object.entries(s.checklistItems).map(([phase, items]) => ({
@@ -973,8 +1101,8 @@ function readSection(section: string): unknown {
         },
         vendors: { total: s.vendors.length, booked: s.vendors.filter((v) => v.stage === 'Booked' || v.stage === 'Paid in Full').length },
         seating: { tables: s.seating.length },
-        venues: s.venues.length,
-        sections: ['guests', 'budget', 'vendors', 'seating', 'venues', 'checklist', 'registry', 'gifts', 'honeymoon', 'timeline', 'settings'],
+        venue: { name: s.venuePlan.venueName || s.settings.venueName, sections: s.venuePlan.sections.length },
+        sections: ['guests', 'budget', 'vendors', 'seating', 'venue', 'checklist', 'registry', 'gifts', 'honeymoon', 'timeline', 'settings'],
       };
     }
   }

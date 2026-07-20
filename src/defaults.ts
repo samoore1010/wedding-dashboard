@@ -7,6 +7,7 @@ import type {
   Vendor,
   WeekendEvent,
 } from './types';
+import { defaultVenuePlan } from './venuePlan';
 
 export const COLORS = [
   '#D4A0A0',
@@ -340,6 +341,7 @@ export const DEFAULT_STATE: AppState = {
   registryChecked: {},
   giftTracker: [],
   venues: [],
+  venuePlan: defaultVenuePlan(),
   honeymoonDays: DEFAULT_HONEYMOON_DAYS,
   notes: '',
   honeymoonNotes: '',
