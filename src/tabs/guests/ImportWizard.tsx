@@ -9,10 +9,10 @@ import {
   X,
   Sparkles,
   ArrowLeft,
-  ArrowRight,
   Loader2,
   Users,
   CircleDot,
+  SlidersHorizontal,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useShallowStore } from '../../store';
@@ -31,7 +31,7 @@ import { aiStageImport, aiConfigured } from '../../guests/aiCategorize';
 import { GUEST_FIELDS, GROUPS, LISTS, SIDES } from '../../guests/schema';
 import type { GuestGroup, GuestList, GuestSide } from '../../types';
 
-type Step = 'upload' | 'map' | 'review';
+type Step = 'upload' | 'review';
 type Row = StagedHousehold & { include: boolean };
 
 export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -47,6 +47,7 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [aiUsed, setAiUsed] = useState(false);
+  const [adjusting, setAdjusting] = useState(false);
 
   const reset = useCallback(() => {
     setStep('upload');
@@ -56,6 +57,7 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
     setBusy(null);
     setError(null);
     setAiUsed(false);
+    setAdjusting(false);
   }, []);
 
   const close = useCallback(() => {
@@ -74,41 +76,68 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
     };
   }, [open, close]);
 
-  // ---- step transitions ----
-  const onSheetLoaded = (s: Sheet) => {
-    if (!s.headers.length || !s.rows.length) {
-      setError('That file looks empty — we couldn’t find a header row and any guests.');
-      return;
-    }
+  // Stage the parsed sheet into households — AI-first, heuristic fallback.
+  const categorize = useCallback(
+    async (s: Sheet, m: ColumnMap) => {
+      let staged: StagedHousehold[] | null = null;
+      let usedAi = false;
+      try {
+        if (await aiConfigured()) {
+          staged = await aiStageImport(s, m, households);
+          usedAi = !!staged;
+        }
+      } catch {
+        /* fall through to heuristics */
+      }
+      if (!staged) staged = stageImport(s, m, households);
+      setAiUsed(usedAi);
+      setRows(staged.map((x) => ({ ...x, include: x.status !== 'duplicate' })));
+    },
+    [households]
+  );
+
+  // Load a sheet from any source, auto-detect columns, and organize — no user
+  // column-mapping step. Everything happens in the background.
+  const ingest = async (loader: () => Promise<Sheet>, loadingMsg: string) => {
     setError(null);
-    setSheet(s);
-    setMap(autoMapColumns(s.headers));
-    setStep('map');
+    setBusy(loadingMsg);
+    try {
+      const s = await loader();
+      if (!s.headers.length || !s.rows.length) {
+        setError('That file looks empty — we couldn’t find any guests in it.');
+        setBusy(null);
+        return;
+      }
+      setSheet(s);
+      // Auto-detect the columns. If nothing resembling a name is found, assume
+      // the first column is the name so we always have something to work with.
+      let m = autoMapColumns(s.headers);
+      if (m.name == null && m.household == null) m = { ...m, name: 0 };
+      setMap(m);
+      setStep('review');
+      setBusy('Organizing your guests…');
+      await categorize(s, m);
+    } catch (e: any) {
+      setError(e?.message || 'Could not read that file.');
+      setStep('upload');
+    } finally {
+      setBusy(null);
+    }
   };
 
-  const runCategorize = async () => {
+  const handleFile = (f: File) => ingest(() => parseFile(f), 'Reading your file…');
+  const handleLink = (url: string) => ingest(() => parseGoogleSheet(url), 'Opening your Google Sheet…');
+
+  // Re-run organization after the (hidden) column adjustment panel is changed.
+  const reorganize = async () => {
     if (!sheet) return;
-    if (map.name == null && map.household == null) {
-      setError('Please map at least a Name (or Household) column so we know who’s who.');
-      return;
-    }
-    setError(null);
-    setBusy('Reading & organizing your guests…');
-    let staged: StagedHousehold[] | null = null;
-    let usedAi = false;
+    setAdjusting(false);
+    setBusy('Re-organizing your guests…');
     try {
-      if (await aiConfigured()) {
-        staged = await aiStageImport(sheet, map, households);
-        usedAi = !!staged;
-      }
-    } catch {
-      /* fall through to heuristics */
+      await categorize(sheet, map);
+    } finally {
+      setBusy(null);
     }
-    if (!staged) staged = stageImport(sheet, map, households);
-    setAiUsed(usedAi);
-    setRows(staged.map((s) => ({ ...s, include: s.status !== 'duplicate' })));
-    setBusy(null);
-    setStep('review');
   };
 
   const publish = () => {
@@ -138,11 +167,15 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
       }))
     );
     const people = chosen.reduce((n, r) => n + r.members.length, 0);
-    toast.success(`Imported ${chosen.length} ${chosen.length === 1 ? 'household' : 'households'} · ${people} guests. Undo from the top bar if needed.`);
+    toast.success(
+      `Imported ${chosen.length} ${chosen.length === 1 ? 'household' : 'households'} · ${people} guests. Undo from the top bar if needed.`
+    );
     close();
   };
 
   if (!open) return null;
+
+  const loading = step === 'review' && !!busy;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg">
@@ -172,20 +205,30 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-5 md:px-8 py-6">
         <div className="mx-auto max-w-4xl">
-          {step === 'upload' && <UploadStep onSheet={onSheetLoaded} setBusy={setBusy} setError={setError} busy={busy} />}
-          {step === 'map' && sheet && (
-            <MapStep sheet={sheet} map={map} onChange={setMap} busy={busy} />
-          )}
-          {step === 'review' && (
-            <ReviewStep rows={rows} setRows={setRows} aiUsed={aiUsed} />
-          )}
+          {step === 'upload' && <UploadStep onFile={handleFile} onLink={handleLink} busy={busy} />}
+          {step === 'review' &&
+            (loading ? (
+              <Working msg={busy!} />
+            ) : (
+              <ReviewStep
+                rows={rows}
+                setRows={setRows}
+                aiUsed={aiUsed}
+                sheet={sheet}
+                map={map}
+                setMap={setMap}
+                adjusting={adjusting}
+                setAdjusting={setAdjusting}
+                onReorganize={reorganize}
+              />
+            ))}
         </div>
       </div>
 
       {/* Footer */}
       <div className="flex items-center justify-between gap-3 px-5 md:px-8 py-3.5 border-t border-border bg-surface shrink-0">
         <div className="text-xs text-muted">
-          {step === 'review' && (
+          {step === 'review' && !loading && (
             <span>
               {rows.filter((r) => r.include).length} of {rows.length} selected ·{' '}
               {rows.filter((r) => r.include).reduce((n, r) => n + r.members.length, 0)} guests
@@ -193,30 +236,20 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
           )}
         </div>
         <div className="flex items-center gap-2">
-          {step === 'map' && (
-            <>
-              <Button variant="ghost" icon={<ArrowLeft size={15} />} onClick={() => setStep('upload')}>
-                Back
-              </Button>
-              <Button icon={busy ? <Loader2 size={15} className="animate-spin" /> : <ArrowRight size={15} />} onClick={runCategorize} disabled={!!busy}>
-                {busy ? 'Organizing…' : 'Continue'}
-              </Button>
-            </>
+          {step === 'upload' && (
+            <Button variant="ghost" onClick={close}>
+              Cancel
+            </Button>
           )}
-          {step === 'review' && (
+          {step === 'review' && !loading && (
             <>
-              <Button variant="ghost" icon={<ArrowLeft size={15} />} onClick={() => setStep('map')}>
-                Back
+              <Button variant="ghost" icon={<ArrowLeft size={15} />} onClick={reset}>
+                Start over
               </Button>
               <Button icon={<Check size={15} />} onClick={publish} disabled={!rows.some((r) => r.include)}>
                 Import {rows.filter((r) => r.include).length || ''} households
               </Button>
             </>
-          )}
-          {step === 'upload' && (
-            <Button variant="ghost" onClick={close}>
-              Cancel
-            </Button>
           )}
         </div>
       </div>
@@ -227,8 +260,8 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
 /* --------------------------------- Steps bar -------------------------------- */
 
 function Steps({ step }: { step: Step }) {
-  const order: Step[] = ['upload', 'map', 'review'];
-  const labels: Record<Step, string> = { upload: 'Upload', map: 'Check columns', review: 'Review & confirm' };
+  const order: Step[] = ['upload', 'review'];
+  const labels: Record<Step, string> = { upload: 'Upload', review: 'Review & confirm' };
   const idx = order.indexOf(step);
   return (
     <div className="flex items-center gap-1.5 mt-0.5 text-[11px]">
@@ -244,53 +277,42 @@ function Steps({ step }: { step: Step }) {
   );
 }
 
+/* -------------------------------- Working ----------------------------------- */
+
+function Working({ msg }: { msg: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center text-center py-24">
+      <span className="grid place-items-center w-16 h-16 rounded-full bg-accent/12 text-accent mb-4">
+        <Loader2 size={28} className="animate-spin" />
+      </span>
+      <div className="font-display text-xl text-ink">{msg}</div>
+      <p className="text-sm text-muted mt-1.5 max-w-sm">
+        We’re sorting people into households and figuring out sides and categories. This only takes a moment.
+      </p>
+    </div>
+  );
+}
+
 /* -------------------------------- Upload step ------------------------------- */
 
 function UploadStep({
-  onSheet,
-  setBusy,
-  setError,
+  onFile,
+  onLink,
   busy,
 }: {
-  onSheet: (s: Sheet) => void;
-  setBusy: (s: string | null) => void;
-  setError: (s: string | null) => void;
+  onFile: (f: File) => void;
+  onLink: (url: string) => void;
   busy: string | null;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
   const [link, setLink] = useState('');
 
-  const handleFile = async (file: File) => {
-    setError(null);
-    setBusy('Reading your file…');
-    try {
-      onSheet(await parseFile(file));
-    } catch (e: any) {
-      setError(e?.message || 'Could not read that file.');
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleLink = async () => {
-    if (!link.trim()) return;
-    setError(null);
-    setBusy('Opening your Google Sheet…');
-    try {
-      onSheet(await parseGoogleSheet(link.trim()));
-    } catch (e: any) {
-      setError(e?.message || 'Could not open that sheet.');
-    } finally {
-      setBusy(null);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted">
-        Upload your guest spreadsheet — however it’s organized. We’ll read it, sort people into households, and guess
-        each person’s side and category. You’ll get to check everything before anything is added.
+        Upload your guest spreadsheet — however it’s organized. We’ll read it, sort people into households, and figure
+        out each person’s side and category automatically. You’ll get to check everything before anything is added.
       </p>
 
       {/* Dropzone */}
@@ -304,7 +326,7 @@ function UploadStep({
           e.preventDefault();
           setDrag(false);
           const f = e.dataTransfer.files?.[0];
-          if (f) handleFile(f);
+          if (f) onFile(f);
         }}
         onClick={() => inputRef.current?.click()}
         className={cn(
@@ -319,7 +341,7 @@ function UploadStep({
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) handleFile(f);
+            if (f) onFile(f);
             e.target.value = '';
           }}
         />
@@ -345,9 +367,9 @@ function UploadStep({
             value={link}
             onChange={(e) => setLink(e.target.value)}
             placeholder="https://docs.google.com/spreadsheets/d/…"
-            onKeyDown={(e) => e.key === 'Enter' && handleLink()}
+            onKeyDown={(e) => e.key === 'Enter' && link.trim() && onLink(link.trim())}
           />
-          <Button variant="outline" onClick={handleLink} disabled={!link.trim() || !!busy}>
+          <Button variant="outline" onClick={() => link.trim() && onLink(link.trim())} disabled={!link.trim() || !!busy}>
             Open
           </Button>
         </div>
@@ -365,114 +387,28 @@ function UploadStep({
   );
 }
 
-/* --------------------------------- Map step -------------------------------- */
-
-function MapStep({
-  sheet,
-  map,
-  onChange,
-  busy,
-}: {
-  sheet: Sheet;
-  map: ColumnMap;
-  onChange: (m: ColumnMap) => void;
-  busy: string | null;
-}) {
-  const NONE = '__none__';
-  const preview = sheet.rows.slice(0, 4);
-  const mappedCount = Object.keys(map).length;
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="font-display text-lg text-ink">Check the columns</h3>
-        <p className="text-sm text-muted mt-1">
-          We matched your spreadsheet’s columns to our fields. Fix any that look off — everything else you can leave.{' '}
-          <span className="text-ink font-medium">{mappedCount} matched automatically.</span>
-        </p>
-      </div>
-
-      {busy && (
-        <div className="flex items-center gap-2 text-sm text-accent">
-          <Loader2 size={16} className="animate-spin" /> {busy}
-        </div>
-      )}
-
-      <div className="grid gap-2.5 sm:grid-cols-2">
-        {GUEST_FIELDS.map((f) => {
-          const col = map[f.key];
-          return (
-            <div key={f.key} className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2">
-              <div className="w-28 shrink-0">
-                <div className="text-sm font-semibold text-ink">{f.header}</div>
-                <div className="text-[10px] uppercase tracking-wide text-muted">{f.level}</div>
-              </div>
-              <span className="text-muted">←</span>
-              <Select
-                className="flex-1 h-8 py-0 text-xs"
-                value={col == null ? NONE : String(col)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  const next = { ...map };
-                  if (v === NONE) delete next[f.key];
-                  else next[f.key] = Number(v);
-                  onChange(next);
-                }}
-              >
-                <option value={NONE}>— not in my sheet —</option>
-                {sheet.headers.map((h, i) => (
-                  <option key={i} value={i}>
-                    {h || `Column ${i + 1}`}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Preview */}
-      <div>
-        <div className="text-[11px] font-bold uppercase tracking-wider text-muted mb-2">Preview · first {preview.length} rows</div>
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-bg text-left">
-                {sheet.headers.map((h, i) => (
-                  <th key={i} className="px-3 py-2 font-semibold text-ink whitespace-nowrap border-b border-border">
-                    {h || `Column ${i + 1}`}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {preview.map((row, ri) => (
-                <tr key={ri} className="border-b border-border/60 last:border-0">
-                  {sheet.headers.map((_, ci) => (
-                    <td key={ci} className="px-3 py-1.5 text-muted whitespace-nowrap">
-                      {row[ci] || <span className="text-border">—</span>}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* -------------------------------- Review step ------------------------------- */
 
 function ReviewStep({
   rows,
   setRows,
   aiUsed,
+  sheet,
+  map,
+  setMap,
+  adjusting,
+  setAdjusting,
+  onReorganize,
 }: {
   rows: Row[];
   setRows: React.Dispatch<React.SetStateAction<Row[]>>;
   aiUsed: boolean;
+  sheet: Sheet | null;
+  map: ColumnMap;
+  setMap: (m: ColumnMap) => void;
+  adjusting: boolean;
+  setAdjusting: (v: boolean) => void;
+  onReorganize: () => void;
 }) {
   const stats = useMemo(() => {
     const chosen = rows.filter((r) => r.include);
@@ -489,13 +425,13 @@ function ReviewStep({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-accent/10 text-accent">
           {aiUsed ? <Sparkles size={13} /> : <CircleDot size={13} />}
           {aiUsed ? 'Organized with AI' : 'Organized automatically'}
         </span>
         <span className="text-sm text-muted">
-          Review below, then import. Nothing is added until you confirm — and you can undo it in one click.
+          Nothing is added until you press Import — and you can undo it in one click.
         </span>
       </div>
 
@@ -511,6 +447,29 @@ function ReviewStep({
           <ReviewRow key={r.tmpId} row={r} onPatch={(p) => patch(r.tmpId, p)} />
         ))}
       </div>
+
+      {/* Discreet escape hatch: only for the rare case a column was misread. */}
+      {sheet && (
+        <div className="pt-2 border-t border-border/60">
+          <button
+            onClick={() => setAdjusting(!adjusting)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted hover:text-accent transition-colors"
+          >
+            <SlidersHorizontal size={13} />
+            {adjusting ? 'Hide column settings' : 'Something look wrong? Adjust which columns were used'}
+          </button>
+          {adjusting && (
+            <div className="mt-3 rounded-xl2 border border-border bg-surface p-4">
+              <ColumnMapper sheet={sheet} map={map} onChange={setMap} />
+              <div className="flex justify-end mt-3">
+                <Button size="sm" onClick={onReorganize}>
+                  Re-organize with these columns
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -533,7 +492,7 @@ function ReviewRow({ row: r, onPatch }: { row: Row; onPatch: (p: Partial<Row>) =
     <div
       className={cn(
         'rounded-xl2 border bg-surface p-3.5 transition-colors',
-        !r.include ? 'opacity-55 border-border' : flagged ? 'border-warning/45' : r.matchId ? 'border-warning/45' : 'border-border'
+        !r.include ? 'opacity-55 border-border' : flagged || r.matchId ? 'border-warning/45' : 'border-border'
       )}
     >
       <div className="flex items-start gap-3">
@@ -607,6 +566,43 @@ function ReviewRow({ row: r, onPatch }: { row: Row; onPatch: (p: Partial<Row>) =
           </label>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ------------------------- Column mapper (hidden by default) ---------------- */
+
+function ColumnMapper({ sheet, map, onChange }: { sheet: Sheet; map: ColumnMap; onChange: (m: ColumnMap) => void }) {
+  const NONE = '__none__';
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {GUEST_FIELDS.map((f) => {
+        const col = map[f.key];
+        return (
+          <div key={f.key} className="flex items-center gap-2">
+            <span className="w-24 shrink-0 text-xs font-semibold text-ink">{f.header}</span>
+            <span className="text-muted text-xs">←</span>
+            <Select
+              className="flex-1 h-8 py-0 text-xs"
+              value={col == null ? NONE : String(col)}
+              onChange={(e) => {
+                const v = e.target.value;
+                const next = { ...map };
+                if (v === NONE) delete next[f.key];
+                else next[f.key] = Number(v);
+                onChange(next);
+              }}
+            >
+              <option value={NONE}>— not in my sheet —</option>
+              {sheet.headers.map((h, i) => (
+                <option key={i} value={i}>
+                  {h || `Column ${i + 1}`}
+                </option>
+              ))}
+            </Select>
+          </div>
+        );
+      })}
     </div>
   );
 }
