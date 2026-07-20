@@ -48,7 +48,11 @@ export function Seating() {
     return set;
   }, [seating]);
 
-  const namedHouseholds = useMemo(() => households.filter(isNamed), [households]);
+  // Only seat guests who are actually invited (not B-list / Maybe).
+  const namedHouseholds = useMemo(
+    () => households.filter((h) => (h.list ?? 'Invited') === 'Invited' && isNamed(h)),
+    [households]
+  );
 
   const unseatedGuests = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -57,7 +61,7 @@ export function Seating() {
       .filter((h) => !q || householdName(h).toLowerCase().includes(q));
   }, [namedHouseholds, seatedIds, search]);
 
-  const totalPeople = households.reduce((s, h) => s + h.members.length, 0);
+  const totalPeople = namedHouseholds.reduce((s, h) => s + h.members.length, 0);
   const seatedPeople = households
     .filter((h) => seatedIds.has(h.id))
     .reduce((s, h) => s + h.members.length, 0);

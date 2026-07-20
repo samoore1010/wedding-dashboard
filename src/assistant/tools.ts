@@ -130,6 +130,10 @@ export const TOOLS: AssistantTool[] = [
         label: str('Household label, e.g. "The Smith Family" or "Jane Doe"'),
         side: enumStr(SIDES, 'Bride, Groom, or Both'),
         group: enumStr(GROUPS, 'Relationship group'),
+        list: enumStr(
+          ['Invited', 'B-list', 'Maybe'],
+          "Invited (firm), B-list (backup — invite if space), or Maybe (undecided). Default Invited."
+        ),
         email: str('Contact email for the invitation'),
         address: str('Mailing address'),
         inviteSent: bool('Whether the invitation has been sent'),
@@ -155,6 +159,7 @@ export const TOOLS: AssistantTool[] = [
         label: i.label || '',
         side: (i.side as GuestSide) || 'Both',
         group: (i.group as GuestGroup) || 'Couple Friends',
+        list: (i.list as any) || 'Invited',
         email: i.email || '',
         address: i.address || '',
         inviteSent: !!i.inviteSent,
@@ -174,6 +179,7 @@ export const TOOLS: AssistantTool[] = [
         label: str(),
         side: enumStr(SIDES),
         group: enumStr(GROUPS),
+        list: enumStr(['Invited', 'B-list', 'Maybe'], 'Move to Invited / B-list / Maybe'),
         email: str(),
         address: str(),
         inviteSent: bool(),
@@ -181,7 +187,10 @@ export const TOOLS: AssistantTool[] = [
       },
       ['id']
     ),
-    summarize: (i) => `Update household ${label('households', i.id)}`,
+    summarize: (i) =>
+      i.list && Object.keys(i).length === 2
+        ? `Move ${label('households', i.id)} to ${i.list}`
+        : `Update household ${label('households', i.id)}`,
     run: (i) => {
       requireEntity('households', i.id);
       const { id, ...patch } = i;
@@ -1113,6 +1122,7 @@ function readSection(section: string): unknown {
           label: h.label,
           side: h.side,
           group: h.group,
+          list: h.list ?? 'Invited',
           email: h.email,
           inviteSent: h.inviteSent,
           table: h.table,
@@ -1224,15 +1234,18 @@ function readSection(section: string): unknown {
       return s.settings;
     case 'overview':
     default: {
-      const members = s.households.flatMap((h) => h.members);
+      const invited = s.households.filter((h) => (h.list ?? 'Invited') === 'Invited');
+      const members = invited.flatMap((h) => h.members);
       return {
         settings: s.settings,
         guests: {
-          households: s.households.length,
+          households: invited.length,
           people: members.length,
           confirmed: members.filter((m) => m.rsvp === 'Yes').length,
           waiting: members.filter((m) => m.rsvp === 'Waiting').length,
           declined: members.filter((m) => m.rsvp === 'No').length,
+          bListPeople: s.households.filter((h) => h.list === 'B-list').reduce((a, h) => a + h.members.length, 0),
+          maybePeople: s.households.filter((h) => h.list === 'Maybe').reduce((a, h) => a + h.members.length, 0),
         },
         budget: {
           total: s.budgetTotal,
