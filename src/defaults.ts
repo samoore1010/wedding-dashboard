@@ -8,6 +8,7 @@ import type {
   WeekendEvent,
 } from './types';
 import { defaultVenuePlan } from './venuePlan';
+import { defaultWeddingParty } from './weddingParty';
 
 export const COLORS = [
   '#D4A0A0',
@@ -342,6 +343,7 @@ export const DEFAULT_STATE: AppState = {
   giftTracker: [],
   venues: [],
   venuePlan: defaultVenuePlan(),
+  weddingParty: defaultWeddingParty(),
   honeymoonDays: DEFAULT_HONEYMOON_DAYS,
   notes: '',
   honeymoonNotes: '',

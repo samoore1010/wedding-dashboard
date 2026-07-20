@@ -17,6 +17,8 @@ import type {
   VenueField,
   VenueHotel,
   VenueSection,
+  PartyGroup,
+  PartyMember,
   WeekendEvent,
   WeddingSettings,
   BudgetCategory,
@@ -25,6 +27,7 @@ import type {
 } from './types';
 import { DEFAULT_STATE } from './defaults';
 import { defaultVenuePlan, makeVenueField, makeVenueHotel, makeVenueSection } from './venuePlan';
+import { defaultWeddingParty, makePartyGroup, makePartyMember } from './weddingParty';
 import { uid } from './utils';
 
 const makeMember = (patch?: Partial<Member>): Member => ({
@@ -55,6 +58,7 @@ const UNDO_DATA_KEYS = [
   'giftTracker',
   'venues',
   'venuePlan',
+  'weddingParty',
   'honeymoonDays',
   'notes',
   'honeymoonNotes',
@@ -161,6 +165,16 @@ interface Actions {
   addVenueHotel: (sectionId: string, hotel?: Partial<VenueHotel>) => void;
   updateVenueHotel: (sectionId: string, hotelId: string, patch: Partial<VenueHotel>) => void;
   removeVenueHotel: (sectionId: string, hotelId: string) => void;
+
+  // Wedding party
+  addPartyGroup: (label?: string) => string;
+  updatePartyGroup: (id: string, patch: Partial<PartyGroup>) => void;
+  removePartyGroup: (id: string) => void;
+  addPartyMember: (groupId: string, member?: Partial<PartyMember>) => string;
+  updatePartyMember: (id: string, patch: Partial<PartyMember>) => void;
+  removePartyMember: (id: string) => void;
+  /** Move a member to a group, optionally before another member (for ordering). */
+  movePartyMember: (id: string, toGroupId: string, beforeId?: string | null) => void;
 
   // Honeymoon
   addHDay: () => void;
@@ -280,6 +294,10 @@ export const useStore = create<AppState & Actions & UndoState>()(
             ...t,
             guestIds: (t.guestIds ?? []).filter((gid) => gid !== id),
           })),
+          weddingParty: {
+            ...s.weddingParty,
+            members: s.weddingParty.members.filter((m) => m.householdId !== id),
+          },
         })),
       addMember: (householdId, member) =>
         set((s) => ({
@@ -309,6 +327,10 @@ export const useStore = create<AppState & Actions & UndoState>()(
               ? { ...h, members: h.members.filter((m) => m.id !== memberId) }
               : h
           ),
+          weddingParty: {
+            ...s.weddingParty,
+            members: s.weddingParty.members.filter((m) => m.memberId !== memberId),
+          },
         })),
 
       toggleCheck: (id, value) =>
@@ -707,6 +729,67 @@ export const useStore = create<AppState & Actions & UndoState>()(
           },
         })),
 
+      // --- Wedding party ---
+      addPartyGroup: (label) => {
+        const g = makePartyGroup(label || 'New group');
+        set((s) => ({ weddingParty: { ...s.weddingParty, groups: [...s.weddingParty.groups, g] } }));
+        return g.id;
+      },
+      updatePartyGroup: (id, patch) =>
+        set((s) => ({
+          weddingParty: {
+            ...s.weddingParty,
+            groups: s.weddingParty.groups.map((g) => (g.id === id ? { ...g, ...patch } : g)),
+          },
+        })),
+      removePartyGroup: (id) =>
+        set((s) => ({
+          weddingParty: {
+            groups: s.weddingParty.groups.filter((g) => g.id !== id),
+            members: s.weddingParty.members.filter((m) => m.groupId !== id),
+          },
+        })),
+      addPartyMember: (groupId, member) => {
+        const m = makePartyMember({ groupId, ...member });
+        set((s) => ({ weddingParty: { ...s.weddingParty, members: [...s.weddingParty.members, m] } }));
+        return m.id;
+      },
+      updatePartyMember: (id, patch) =>
+        set((s) => ({
+          weddingParty: {
+            ...s.weddingParty,
+            members: s.weddingParty.members.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+          },
+        })),
+      removePartyMember: (id) =>
+        set((s) => ({
+          weddingParty: {
+            ...s.weddingParty,
+            members: s.weddingParty.members.filter((m) => m.id !== id),
+          },
+        })),
+      movePartyMember: (id, toGroupId, beforeId) =>
+        set((s) => {
+          const members = [...s.weddingParty.members];
+          const idx = members.findIndex((m) => m.id === id);
+          if (idx < 0) return {} as any;
+          const [orig] = members.splice(idx, 1);
+          const moved = { ...orig, groupId: toGroupId };
+          let insertAt: number;
+          if (beforeId) {
+            const bi = members.findIndex((x) => x.id === beforeId);
+            insertAt = bi >= 0 ? bi : members.length;
+          } else {
+            let last = -1;
+            members.forEach((x, i) => {
+              if (x.groupId === toGroupId) last = i;
+            });
+            insertAt = last + 1;
+          }
+          members.splice(insertAt, 0, moved);
+          return { weddingParty: { ...s.weddingParty, members } };
+        }),
+
       addHDay: () =>
         set((s) => ({
           honeymoonDays: [
@@ -756,7 +839,7 @@ export const useStore = create<AppState & Actions & UndoState>()(
     }),
     {
       name: 'wedding-dashboard-v1',
-      version: 4,
+      version: 5,
       // Undo history is session-only — never sync it to the server/localStorage.
       partialize: (s) => {
         const { undoStack: _u, ...rest } = s as any;
@@ -826,6 +909,10 @@ export const useStore = create<AppState & Actions & UndoState>()(
           const vs = persisted.venues ?? [];
           const chosen = vs.find((v: any) => v?.favorite) || vs[0];
           persisted.venuePlan = defaultVenuePlan(chosen);
+        }
+        // v5: introduce the wedding party, groups labeled from the couple.
+        if (version < 5 && !persisted.weddingParty) {
+          persisted.weddingParty = defaultWeddingParty(persisted.settings);
         }
         return persisted;
       },

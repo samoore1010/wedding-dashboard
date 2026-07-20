@@ -100,6 +100,7 @@ export const TOOLS: AssistantTool[] = [
         [
           'overview',
           'guests',
+          'party',
           'budget',
           'vendors',
           'seating',
@@ -650,6 +651,113 @@ export const TOOLS: AssistantTool[] = [
     },
   },
 
+  // ---------------------------------------------------------------- wedding party
+  // The party has customizable groups (columns) and members. Members usually
+  // link to a guest via memberId. Call get_dashboard('party') for group/member
+  // ids, and get_dashboard('guests') for guest member ids to link.
+  {
+    name: 'party_add_group',
+    kind: 'write',
+    description: 'Add a wedding-party group/column (e.g. a partner\'s party, or "Other honor roles").',
+    input_schema: obj({ label: str('Group name') }, ['label']),
+    summarize: (i) => `Add party group "${i.label}"`,
+    run: (i) => {
+      S().addPartyGroup(i.label);
+      return `Added party group "${i.label}".`;
+    },
+  },
+  {
+    name: 'party_rename_group',
+    kind: 'write',
+    description: 'Rename a wedding-party group.',
+    input_schema: obj({ groupId: str(), label: str() }, ['groupId', 'label']),
+    summarize: (i) => `Rename party group to "${i.label}"`,
+    run: (i) => {
+      if (!S().weddingParty.groups.some((g) => g.id === i.groupId))
+        throw new Error(`No party group "${i.groupId}".`);
+      S().updatePartyGroup(i.groupId, { label: i.label });
+      return `Renamed group to "${i.label}".`;
+    },
+  },
+  {
+    name: 'party_add_member',
+    kind: 'write',
+    description:
+      'Add a person to a wedding-party group. Link to a guest by passing householdId + memberId ' +
+      '(from get_dashboard("guests")), or just pass a name for someone not on the guest list.',
+    input_schema: obj(
+      {
+        groupId: str('Party group id from get_dashboard("party")'),
+        name: str('Person name (required if not linking a guest)'),
+        householdId: str('Guest household id to link'),
+        memberId: str('Guest member id to link'),
+        role: str('e.g. Best Man, Person of Honor, Officiant'),
+        ask: enumStr(['Not yet', 'Asked', 'Confirmed', 'Declined']),
+      },
+      ['groupId']
+    ),
+    summarize: (i) =>
+      `Add ${i.name || guestMemberName(i.householdId, i.memberId) || 'a member'} to ${partyGroupLabel(i.groupId)}${
+        i.role ? ` as ${i.role}` : ''
+      }`,
+    run: (i) => {
+      if (!S().weddingParty.groups.some((g) => g.id === i.groupId))
+        throw new Error(`No party group "${i.groupId}". Call get_dashboard("party").`);
+      const name = i.name || guestMemberName(i.householdId, i.memberId);
+      if (!name) throw new Error('Provide a name, or a valid householdId + memberId.');
+      S().addPartyMember(i.groupId, {
+        name,
+        householdId: i.householdId || '',
+        memberId: i.memberId || '',
+        role: i.role || '',
+        ask: (i.ask as any) || 'Not yet',
+      });
+      return `Added ${name} to the wedding party.`;
+    },
+  },
+  {
+    name: 'party_update_member',
+    kind: 'write',
+    description: "Update a party member's group, role, asked-status, attire, gift, thank-you, contact, or notes.",
+    input_schema: obj(
+      {
+        id: str('Party member id'),
+        groupId: str('Move to this group'),
+        role: str(),
+        ask: enumStr(['Not yet', 'Asked', 'Confirmed', 'Declined']),
+        attireSize: str(),
+        attireStatus: str(),
+        gift: str(),
+        thankYou: bool(),
+        contact: str(),
+        notes: str(),
+      },
+      ['id']
+    ),
+    summarize: (i) => `Update party member ${partyMemberLabel(i.id)}`,
+    run: (i) => {
+      if (!S().weddingParty.members.some((m) => m.id === i.id))
+        throw new Error(`No party member "${i.id}".`);
+      const { id, ...patch } = i;
+      S().updatePartyMember(id, clean(patch));
+      return `Updated ${partyMemberLabel(id)}.`;
+    },
+  },
+  {
+    name: 'party_remove_member',
+    kind: 'write',
+    description: 'Remove someone from the wedding party (they stay on the guest list).',
+    input_schema: obj({ id: str() }, ['id']),
+    summarize: (i) => `Remove ${partyMemberLabel(i.id)} from the wedding party`,
+    run: (i) => {
+      const name = partyMemberLabel(i.id);
+      if (!S().weddingParty.members.some((m) => m.id === i.id))
+        throw new Error(`No party member "${i.id}".`);
+      S().removePartyMember(i.id);
+      return `Removed ${name} from the wedding party.`;
+    },
+  },
+
   // ---------------------------------------------------------------- checklist
   {
     name: 'add_checklist_item',
@@ -976,6 +1084,23 @@ function venueHotelLabel(hotelId: string): string {
   return `"${hotelId}"`;
 }
 
+// ---- wedding-party helpers ----
+function guestMemberName(householdId?: string, memberId?: string): string {
+  if (!householdId || !memberId) return '';
+  const h = S().households.find((x) => x.id === householdId);
+  return h?.members.find((m) => m.id === memberId)?.name || '';
+}
+function partyGroupLabel(id: string): string {
+  return `"${S().weddingParty.groups.find((g) => g.id === id)?.label ?? id}"`;
+}
+function partyMemberName(m: { memberId: string; householdId: string; name: string }): string {
+  return guestMemberName(m.householdId, m.memberId) || m.name;
+}
+function partyMemberLabel(id: string): string {
+  const m = S().weddingParty.members.find((x) => x.id === id);
+  return m ? `"${partyMemberName(m) || 'unnamed'}"` : `"${id}"`;
+}
+
 // ---- dashboard reads ----------------------------------------------------
 
 function readSection(section: string): unknown {
@@ -1030,6 +1155,21 @@ function readSection(section: string): unknown {
         unseated: s.households
           .filter((h) => (h.label || h.members.some((m) => m.name)) && !s.seating.some((t) => (t.guestIds ?? []).includes(h.id)))
           .map((h) => ({ id: h.id, label: h.label, size: h.members.length })),
+      };
+    case 'party':
+      return {
+        groups: s.weddingParty.groups.map((g) => ({ id: g.id, label: g.label })),
+        members: s.weddingParty.members.map((m) => ({
+          id: m.id,
+          groupId: m.groupId,
+          name: partyMemberName(m),
+          role: m.role,
+          ask: m.ask,
+          attireSize: m.attireSize,
+          attireStatus: m.attireStatus,
+          gift: m.gift,
+          thankYou: m.thankYou,
+        })),
       };
     case 'venue':
       return {
@@ -1101,8 +1241,9 @@ function readSection(section: string): unknown {
         },
         vendors: { total: s.vendors.length, booked: s.vendors.filter((v) => v.stage === 'Booked' || v.stage === 'Paid in Full').length },
         seating: { tables: s.seating.length },
+        weddingParty: { members: s.weddingParty.members.length, groups: s.weddingParty.groups.length },
         venue: { name: s.venuePlan.venueName || s.settings.venueName, sections: s.venuePlan.sections.length },
-        sections: ['guests', 'budget', 'vendors', 'seating', 'venue', 'checklist', 'registry', 'gifts', 'honeymoon', 'timeline', 'settings'],
+        sections: ['guests', 'party', 'budget', 'vendors', 'seating', 'venue', 'checklist', 'registry', 'gifts', 'honeymoon', 'timeline', 'settings'],
       };
     }
   }
