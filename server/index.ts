@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
+import { streamSSE } from 'hono/streaming';
+import Anthropic from '@anthropic-ai/sdk';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -100,6 +102,65 @@ app.delete('/api/images/:id', async (c) => {
     }
   }
   return c.text('ok');
+});
+
+// --- AI wedding-planning assistant proxy ---------------------------------
+// The browser runs the tool-use loop (its tools mutate the local store); this
+// endpoint only injects the API key and streams Anthropic's response back, so
+// the key never reaches the client. One request per assistant turn.
+const ASSISTANT_MODEL = process.env.ASSISTANT_MODEL || 'claude-opus-4-8';
+
+app.get('/api/assistant/status', (c) =>
+  c.json({ configured: Boolean(process.env.ANTHROPIC_API_KEY), model: ASSISTANT_MODEL })
+);
+
+app.post('/api/assistant', async (c) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return c.json(
+      { error: 'The assistant is not configured. Set ANTHROPIC_API_KEY on the server.' },
+      503
+    );
+  }
+
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.text('invalid json', 400);
+  }
+
+  const client = new Anthropic({ apiKey });
+
+  return streamSSE(c, async (stream) => {
+    const send = (data: unknown) => stream.writeSSE({ data: JSON.stringify(data) });
+    try {
+      const s = client.messages.stream({
+        model: body.model || ASSISTANT_MODEL,
+        max_tokens: body.max_tokens ?? 16000,
+        system: body.system,
+        messages: body.messages,
+        tools: body.tools,
+        tool_choice: body.tool_choice,
+        thinking: body.thinking,
+        output_config: body.output_config,
+      } as any);
+
+      s.on('text', (t: string) => send({ type: 'delta', text: t }));
+
+      const final = await s.finalMessage();
+      await send({ type: 'final', message: final });
+    } catch (e: any) {
+      const status = e?.status;
+      const message =
+        status === 401
+          ? 'Invalid API key. Check ANTHROPIC_API_KEY on the server.'
+          : status === 429
+          ? 'Rate limited by the Claude API. Try again in a moment.'
+          : e?.message || 'The assistant request failed.';
+      await send({ type: 'error', error: message });
+    }
+  });
 });
 
 app.get('/health', (c) => c.text('ok'));

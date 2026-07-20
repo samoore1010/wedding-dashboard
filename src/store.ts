@@ -33,6 +33,48 @@ const makeMember = (patch?: Partial<Member>): Member => ({
   ...patch,
 });
 
+// Data slices captured for undo — everything the assistant can mutate.
+const UNDO_DATA_KEYS = [
+  'settings',
+  'budgetTotal',
+  'budgetCats',
+  'budgetSpent',
+  'households',
+  'checklist',
+  'checklistItems',
+  'vendors',
+  'seating',
+  'runOfShow',
+  'weekend',
+  'registryCats',
+  'registryChecked',
+  'giftTracker',
+  'venues',
+  'honeymoonDays',
+  'notes',
+  'honeymoonNotes',
+  'packingList',
+  'honeymoonDestination',
+  'honeymoonBudget',
+  'moodBoard',
+] as const;
+
+export interface UndoEntry {
+  id: string;
+  label: string;
+  ts: number;
+  data: Partial<AppState>;
+}
+
+interface UndoState {
+  /** Most-recent-first stack of pre-change snapshots. Not persisted. */
+  undoStack: UndoEntry[];
+  /** Snapshot current data before a change and return the entry id. */
+  pushUndo: (label: string) => string;
+  /** Restore a snapshot (latest by default). Also drops any newer snapshots. */
+  undo: (id?: string) => void;
+}
+
 interface Actions {
   // Settings
   updateSettings: (patch: Partial<WeddingSettings>) => void;
@@ -125,10 +167,35 @@ interface Actions {
   resetState: () => void;
 }
 
-export const useStore = create<AppState & Actions>()(
+export const useStore = create<AppState & Actions & UndoState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...DEFAULT_STATE,
+
+      undoStack: [],
+      pushUndo: (label) => {
+        const id = 'u_' + uid();
+        const s = get();
+        const data: Partial<AppState> = {};
+        for (const k of UNDO_DATA_KEYS) {
+          (data as any)[k] = structuredClone((s as any)[k]);
+        }
+        set((st) => ({
+          undoStack: [{ id, label, ts: Date.now(), data }, ...st.undoStack].slice(0, 25),
+        }));
+        return id;
+      },
+      undo: (id) =>
+        set((st) => {
+          const idx = id ? st.undoStack.findIndex((e) => e.id === id) : 0;
+          if (idx < 0) return {} as any;
+          const entry = st.undoStack[idx];
+          const restored: any = {};
+          for (const k of UNDO_DATA_KEYS) {
+            if (k in entry.data) restored[k] = (entry.data as any)[k];
+          }
+          return { ...restored, undoStack: st.undoStack.slice(idx + 1) };
+        }),
 
       updateSettings: (patch) =>
         set((s) => ({ settings: { ...s.settings, ...patch } })),
@@ -159,6 +226,12 @@ export const useStore = create<AppState & Actions>()(
 
       addHousehold: (household) => {
         const id = 'g_' + uid();
+        // Normalize any provided members through makeMember so each gets an id
+        // and defaults — callers (UI, assistant) may pass bare member objects.
+        const members =
+          household?.members && household.members.length
+            ? household.members.map((m) => makeMember(m))
+            : [makeMember()];
         set((s) => ({
           households: [
             ...s.households,
@@ -172,8 +245,8 @@ export const useStore = create<AppState & Actions>()(
               inviteSent: false,
               notes: '',
               table: '',
-              members: [makeMember()],
               ...household,
+              members,
             },
           ],
         }));
@@ -573,6 +646,11 @@ export const useStore = create<AppState & Actions>()(
     {
       name: 'wedding-dashboard-v1',
       version: 3,
+      // Undo history is session-only — never sync it to the server/localStorage.
+      partialize: (s) => {
+        const { undoStack: _u, ...rest } = s as any;
+        return rest;
+      },
       storage: isCloudMode()
         ? createJSONStorage(() => cloudStorage)
         : createJSONStorage(() => localStorage),
@@ -637,5 +715,5 @@ export const useStore = create<AppState & Actions>()(
   )
 );
 
-export const useShallowStore = <T,>(selector: (s: AppState & Actions) => T): T =>
+export const useShallowStore = <T,>(selector: (s: AppState & Actions & UndoState) => T): T =>
   useStore(useShallow(selector));
