@@ -1,5 +1,14 @@
-import { useMemo, useState, useEffect } from 'react';
-import { Trash2, Search, UserPlus, Download, X, Plus, Users } from 'lucide-react';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import {
+  Trash2,
+  Search,
+  UserPlus,
+  Download,
+  Upload,
+  SlidersHorizontal,
+  X,
+  Plus,
+} from 'lucide-react';
 import { useShallowStore } from '../store';
 import { Card } from '../components/ui/Card';
 import { StatCard } from '../components/ui/StatCard';
@@ -10,6 +19,8 @@ import { IconButton } from '../components/ui/IconButton';
 import { confirmAction } from '../components/ui/ConfirmDialog';
 import type { Household, Member, GuestGroup, GuestSide, GuestStatus, GuestList, MemberKind } from '../types';
 import { cn, householdSize, repliedCount, suggestLabel } from '../utils';
+import { exportGuestsCsv } from '../guests/csv';
+import { ImportWizard } from './guests/ImportWizard';
 
 const RSVP_FILTERS = ['All', 'Yes', 'Waiting', 'No'] as const;
 const SIDE_FILTERS = ['All', 'Bride', 'Groom'] as const;
@@ -63,6 +74,14 @@ export function Guests() {
   const [groupBy, setGroupBy] = useState<(typeof GROUP_BYS)[number]>('Side');
   const [search, setSearch] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+
+  const activeFilters = (rsvp !== 'All' ? 1 : 0) + (side !== 'All' ? 1 : 0) + (list !== 'All' ? 1 : 0);
+  const resetFilters = () => {
+    setRsvp('All');
+    setSide('All');
+    setList('All');
+  };
 
   const openHousehold = households.find((h) => h.id === openId) || null;
 
@@ -133,34 +152,6 @@ export function Guests() {
     setOpenId(id);
   };
 
-  const exportCsv = () => {
-    const rows = [
-      ['Name', 'Household', 'List', 'Side', 'Group', 'Adult/Child', 'RSVP', 'Meal', 'Dietary', 'Table', 'Notes'],
-      ...households.flatMap((h) =>
-        h.members.map((m) => [
-          m.name,
-          h.label || suggestLabel(h.members),
-          glist(h),
-          h.side,
-          h.group,
-          m.kind === 'child' ? 'Child' : 'Adult',
-          m.rsvp,
-          m.meal,
-          m.dietary,
-          h.table,
-          h.notes,
-        ])
-      ),
-    ];
-    const csv = rows.map((r) => r.map((c) => `"${(c || '').replace(/"/g, '""')}"`).join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'guests.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="space-y-6">
       {/* Stats */}
@@ -176,8 +167,11 @@ export function Guests() {
         title="Guest List"
         action={
           <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" size="sm" icon={<Download size={14} />} onClick={exportCsv}>
-              CSV
+            <Button variant="soft" size="sm" icon={<Upload size={14} />} onClick={() => setImportOpen(true)}>
+              Import
+            </Button>
+            <Button variant="outline" size="sm" icon={<Download size={14} />} onClick={() => exportGuestsCsv(households)}>
+              Export
             </Button>
             <Button icon={<UserPlus size={14} />} size="sm" onClick={openNew}>
               Add Household
@@ -185,8 +179,8 @@ export function Guests() {
           </div>
         }
       >
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
+        {/* Toolbar — search + a single Filters popover + grouping */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <Input
@@ -196,11 +190,18 @@ export function Guests() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Segmented options={RSVP_FILTERS} value={rsvp} onChange={setRsvp} />
-          <Segmented options={SIDE_FILTERS} value={side} onChange={setSide} tone="side" />
-          <Segmented options={LIST_FILTERS} value={list} onChange={setList} />
+          <FilterMenu
+            rsvp={rsvp}
+            side={side}
+            list={list}
+            onRsvp={setRsvp}
+            onSide={setSide}
+            onList={setList}
+            count={activeFilters}
+            onReset={resetFilters}
+          />
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted font-semibold whitespace-nowrap">Group by</span>
+            <span className="text-xs text-muted font-semibold whitespace-nowrap">Group</span>
             <Select
               value={groupBy}
               onChange={(e) => setGroupBy(e.target.value as (typeof GROUP_BYS)[number])}
@@ -213,6 +214,23 @@ export function Guests() {
           </div>
         </div>
 
+        {/* Active-filter chips — always show what's applied */}
+        {(activeFilters > 0 || search) && (
+          <div className="flex flex-wrap items-center gap-1.5 mb-4">
+            {search && (
+              <FilterChip label={`“${search}”`} onClear={() => setSearch('')} />
+            )}
+            {rsvp !== 'All' && <FilterChip label={`RSVP: ${rsvp}`} onClear={() => setRsvp('All')} />}
+            {side !== 'All' && <FilterChip label={`Side: ${side}`} onClear={() => setSide('All')} />}
+            {list !== 'All' && <FilterChip label={`List: ${list}`} onClear={() => setList('All')} />}
+            {activeFilters > 1 && (
+              <button onClick={resetFilters} className="text-[11px] font-semibold text-muted hover:text-accent px-1.5">
+                Clear all
+              </button>
+            )}
+          </div>
+        )}
+
         {visible.length === 0 ? (
           <EmptyState
             icon={<UserPlus size={22} />}
@@ -222,7 +240,20 @@ export function Guests() {
                 ? 'Add your first household — then add the people in it.'
                 : 'Try clearing the filters above.'
             }
-            action={<Button onClick={openNew}>Add Household</Button>}
+            action={
+              households.length === 0 ? (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button icon={<Upload size={15} />} onClick={() => setImportOpen(true)}>
+                    Import a spreadsheet
+                  </Button>
+                  <Button variant="outline" onClick={openNew}>
+                    Add manually
+                  </Button>
+                </div>
+              ) : (
+                <Button onClick={openNew}>Add Household</Button>
+              )
+            }
           />
         ) : (
           <div className="space-y-5">
@@ -284,7 +315,113 @@ export function Guests() {
           }
         }}
       />
+
+      <ImportWizard open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
+  );
+}
+
+/* -------------------------------- Filter menu ------------------------------ */
+
+function FilterMenu({
+  rsvp,
+  side,
+  list,
+  onRsvp,
+  onSide,
+  onList,
+  count,
+  onReset,
+}: {
+  rsvp: (typeof RSVP_FILTERS)[number];
+  side: (typeof SIDE_FILTERS)[number];
+  list: (typeof LIST_FILTERS)[number];
+  onRsvp: (v: (typeof RSVP_FILTERS)[number]) => void;
+  onSide: (v: (typeof SIDE_FILTERS)[number]) => void;
+  onList: (v: (typeof LIST_FILTERS)[number]) => void;
+  count: number;
+  onReset: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          'inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm font-medium transition-colors',
+          count > 0 ? 'border-accent/50 bg-accent/8 text-accent' : 'border-border text-ink hover:bg-bg'
+        )}
+      >
+        <SlidersHorizontal size={14} />
+        Filters
+        {count > 0 && (
+          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-white text-[10px] font-bold tabular-nums">
+            {count}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 z-30 mt-2 w-64 rounded-xl2 border border-border bg-surface shadow-lift p-4 space-y-4">
+          <FilterGroup label="RSVP" options={RSVP_FILTERS} value={rsvp} onChange={onRsvp} />
+          <FilterGroup label="Side" options={SIDE_FILTERS} value={side} onChange={onSide} tone="side" />
+          <FilterGroup label="List" options={LIST_FILTERS} value={list} onChange={onList} />
+          {count > 0 && (
+            <button onClick={onReset} className="w-full text-center text-xs font-semibold text-muted hover:text-accent pt-1">
+              Reset filters
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilterGroup<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+  tone = 'default',
+}: {
+  label: string;
+  options: readonly T[];
+  value: T;
+  onChange: (v: T) => void;
+  tone?: 'default' | 'side';
+}) {
+  return (
+    <div>
+      <div className="text-[11px] font-bold uppercase tracking-wider text-muted mb-1.5">{label}</div>
+      <Segmented options={options} value={value} onChange={onChange} tone={tone} />
+    </div>
+  );
+}
+
+function FilterChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-bg border border-border pl-2.5 pr-1 py-0.5 text-[11px] font-semibold text-ink">
+      {label}
+      <button onClick={onClear} className="grid place-items-center w-4 h-4 rounded-full text-muted hover:text-danger hover:bg-danger/10" aria-label={`Clear ${label}`}>
+        <X size={11} />
+      </button>
+    </span>
   );
 }
 
@@ -322,7 +459,7 @@ function Segmented<T extends string>({
   tone?: 'default' | 'side';
 }) {
   return (
-    <div className="flex gap-1 bg-bg p-1 rounded-full">
+    <div className="flex flex-wrap gap-1 bg-bg p-1 rounded-2xl">
       {options.map((o) => {
         const active = value === o;
         const activeCls =
