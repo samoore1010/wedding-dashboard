@@ -148,6 +148,38 @@ export interface Venue {
   favorite: boolean;
 }
 
+// ---- Wedding party ------------------------------------------------------
+export type PartyAsk = 'Not yet' | 'Asked' | 'Confirmed' | 'Declined';
+
+/** A customizable party group / column (e.g. "Drew's Party", "Other roles"). */
+export interface PartyGroup {
+  id: string;
+  label: string;
+}
+
+/** A person in the wedding party. Usually linked to a guest member for name/sync. */
+export interface PartyMember {
+  id: string;
+  groupId: string;
+  /** Link to a guest member (empty for a manually-added person). */
+  householdId: string;
+  memberId: string;
+  name: string;
+  role: string;
+  ask: PartyAsk;
+  attireSize: string;
+  attireStatus: string;
+  gift: string;
+  thankYou: boolean;
+  contact: string;
+  notes: string;
+}
+
+export interface WeddingParty {
+  groups: PartyGroup[];
+  members: PartyMember[];
+}
+
 // ---- Venue plan (single chosen venue) ----------------------------------
 export type Audience = 'guest' | 'internal';
 
@@ -239,6 +271,7 @@ export interface AppState {
   venues: Venue[];
   /** The active venue planning hub + guest-guide source. */
   venuePlan: VenuePlan;
+  weddingParty: WeddingParty;
   honeymoonDays: HoneymoonDay[];
   notes: string;
   honeymoonNotes: string;
@@ -252,6 +285,7 @@ export type TabId =
   | 'overview'
   | 'budget'
   | 'guests'
+  | 'weddingparty'
   | 'venues'
   | 'moodboard'
   | 'checklist'

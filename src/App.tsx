@@ -12,6 +12,7 @@ import type { TabId } from './types';
 import { Overview } from './tabs/Overview';
 import { Budget } from './tabs/Budget';
 import { Guests } from './tabs/Guests';
+import { WeddingParty } from './tabs/WeddingParty';
 import { Venues } from './tabs/Venues';
 import { MoodBoard } from './tabs/MoodBoard';
 import { Checklist } from './tabs/Checklist';
@@ -51,6 +52,7 @@ function App() {
           {activeTab === 'overview' && <Overview onJump={setActiveTab} />}
           {activeTab === 'budget' && <Budget />}
           {activeTab === 'guests' && <Guests />}
+          {activeTab === 'weddingparty' && <WeddingParty />}
           {activeTab === 'venues' && <Venues />}
           {activeTab === 'moodboard' && <MoodBoard />}
           {activeTab === 'checklist' && <Checklist />}

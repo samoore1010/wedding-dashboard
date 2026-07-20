@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Wallet,
   Users,
+  Crown,
   Building2,
   CheckSquare,
   Briefcase,
@@ -29,6 +30,7 @@ const TABS: { id: TabId; label: string; icon: any }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'budget', label: 'Budget', icon: Wallet },
   { id: 'guests', label: 'Guests', icon: Users },
+  { id: 'weddingparty', label: 'Wedding Party', icon: Crown },
   { id: 'venues', label: 'Venue', icon: Building2 },
   { id: 'moodboard', label: 'Mood Board', icon: ImageIcon },
   { id: 'checklist', label: 'Checklist', icon: CheckSquare },
@@ -41,9 +43,10 @@ const TABS: { id: TabId; label: string; icon: any }[] = [
 ];
 
 export function Nav({ active, onChange, mobileOpen, onMobileClose }: NavProps) {
-  const { households, vendors, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard } =
+  const { households, party, vendors, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard } =
     useShallowStore((s) => ({
       households: s.households,
+      party: s.weddingParty,
       vendors: s.vendors,
       checklistItems: s.checklistItems,
       checklist: s.checklist,
@@ -70,13 +73,14 @@ export function Nav({ active, onChange, mobileOpen, onMobileClose }: NavProps) {
 
     return {
       guests: guestCount || null,
+      weddingparty: party.members.length || null,
       moodboard: moodBoard.length || null,
       checklist: totalChecks ? `${pct(doneChecks, totalChecks)}%` : null,
       vendors: vendors.length ? `${booked}/${vendors.length}` : null,
       registry: totalReg ? `${purchasedReg}/${totalReg}` : null,
       gifts: giftsToThank > 0 ? giftsToThank : null,
     } as Record<string, string | number | null>;
-  }, [households, vendors, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard]);
+  }, [households, party, vendors, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard]);
 
   // close mobile drawer when tab changes via Escape
   useEffect(() => {

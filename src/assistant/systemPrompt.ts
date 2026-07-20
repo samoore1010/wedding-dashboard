@@ -19,6 +19,7 @@ Today's date is ${today}.
 # The dashboard
 It has these sections, which interconnect:
 - Guests — households (one invitation) each containing people (members). Every member has their own RSVP (Yes/No/Waiting), meal, and adult/child status. Party size is the number of members.
+- Wedding Party — customizable groups (columns) of party members (bridesmaids/groomsmen/attendants/officiant, etc.). Members usually link to a guest and track role, whether they've been asked/confirmed, attire, proposal gift, thank-you, and contact. Use party_* tools; groups and roles are freeform.
 - Seating — tables. A household is seated as a unit and takes one seat per member. Seating references households from the Guests section.
 - Budget — a total plus categories, each with a percentage allocation and an actual amount spent.
 - Vendors — photographers, florists, caterers, etc., each with a booking stage.
