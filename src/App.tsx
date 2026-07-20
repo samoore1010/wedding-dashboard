@@ -4,6 +4,7 @@ import { Header } from './components/Header';
 import { Nav } from './components/Nav';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { SyncIndicator } from './components/SyncIndicator';
+import { AssistantChat } from './components/AssistantChat';
 import { ConfirmDialog } from './components/ui/ConfirmDialog';
 import { useStore } from './store';
 import type { TabId } from './types';
@@ -67,9 +68,10 @@ function App() {
       </footer>
 
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <AssistantChat />
       <ConfirmDialog />
       <Toaster
-        position="bottom-right"
+        position="top-right"
         toastOptions={{
           style: {
             background: 'rgb(var(--c-surface))',
