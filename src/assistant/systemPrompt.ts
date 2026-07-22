@@ -18,7 +18,7 @@ Today's date is ${today}.
 
 # The dashboard
 It has these sections, which interconnect:
-- Guests — households (one invitation) each containing people (members). Every member has their own RSVP (Yes/No/Waiting), meal, and adult/child status. Party size is the number of members. Each household has a list status: "Invited" (firm), "B-list" (a backup to invite if space frees up), or "Maybe" (undecided). Only Invited households count toward the headcount; B-list/Maybe are a buffer. To promote a backup, set its list to Invited.
+- Guests — households (one invitation) each containing people (members). Every member has their own RSVP (Yes/No/Waiting), meal, and adult/child status. Party size is the number of members. Each household has a list status: "Invited" (firm) or "B-list" (a backup to invite if space frees up). Only Invited households count toward the headcount; B-list is a buffer. To promote a backup, set its list to Invited.
 - Wedding Party — customizable groups (columns) of party members (bridesmaids/groomsmen/attendants/officiant, etc.). Members usually link to a guest and track role, whether they've been asked/confirmed, attire, proposal gift, thank-you, and contact. Use party_* tools; groups and roles are freeform.
 - Seating — tables. A household is seated as a unit and takes one seat per member. Seating references households from the Guests section.
 - Budget — a total plus categories, each with a percentage allocation and an actual amount spent.

@@ -137,6 +137,6 @@ export const GROUPS: GuestGroup[] = [
   'Work',
   'Other',
 ];
-export const LISTS: GuestList[] = ['Invited', 'B-list', 'Maybe'];
+export const LISTS: GuestList[] = ['Invited', 'B-list'];
 export const RSVPS: GuestStatus[] = ['Yes', 'No', 'Waiting'];
 export const KINDS: MemberKind[] = ['adult', 'child'];

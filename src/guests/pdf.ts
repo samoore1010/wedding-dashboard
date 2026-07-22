@@ -303,9 +303,9 @@ const buildHtml = (ctx: PdfExportContext): string => {
     <div class="stats">
       ${statChip('Households', stats.households, p.ink, 'invitations')}
       ${statChip('Guests', stats.guests, p.primary, 'people total')}
-      ${statChip('B-list', stats.bList, p.warning, 'people')}
       ${statChip('Family', stats.family, p.sage, 'people')}
       ${statChip('Friends', stats.friends, p.rose, 'people')}
+      ${statChip('B-list', stats.bList, p.warning, 'people')}
     </div>
 
     ${body}

@@ -48,7 +48,7 @@ export function Seating() {
     return set;
   }, [seating]);
 
-  // Only seat guests who are actually invited (not B-list / Maybe).
+  // Only seat guests who are actually invited (not B-list).
   const namedHouseholds = useMemo(
     () => households.filter((h) => (h.list ?? 'Invited') === 'Invited' && isNamed(h)),
     [households]

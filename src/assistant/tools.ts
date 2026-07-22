@@ -131,8 +131,8 @@ export const TOOLS: AssistantTool[] = [
         side: enumStr(SIDES, 'Bride, Groom, or Both'),
         group: enumStr(GROUPS, 'Relationship group'),
         list: enumStr(
-          ['Invited', 'B-list', 'Maybe'],
-          "Invited (firm), B-list (backup — invite if space), or Maybe (undecided). Default Invited."
+          ['Invited', 'B-list'],
+          'Invited (firm) or B-list (backup — invite if space frees up). Default Invited.'
         ),
         email: str('Contact email for the invitation'),
         address: str('Mailing address'),
@@ -179,7 +179,7 @@ export const TOOLS: AssistantTool[] = [
         label: str(),
         side: enumStr(SIDES),
         group: enumStr(GROUPS),
-        list: enumStr(['Invited', 'B-list', 'Maybe'], 'Move to Invited / B-list / Maybe'),
+        list: enumStr(['Invited', 'B-list'], 'Move to Invited / B-list'),
         email: str(),
         address: str(),
         inviteSent: bool(),
@@ -1245,7 +1245,6 @@ function readSection(section: string): unknown {
           waiting: members.filter((m) => m.rsvp === 'Waiting').length,
           declined: members.filter((m) => m.rsvp === 'No').length,
           bListPeople: s.households.filter((h) => h.list === 'B-list').reduce((a, h) => a + h.members.length, 0),
-          maybePeople: s.households.filter((h) => h.list === 'Maybe').reduce((a, h) => a + h.members.length, 0),
         },
         budget: {
           total: s.budgetTotal,

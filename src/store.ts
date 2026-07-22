@@ -874,7 +874,7 @@ export const useStore = create<AppState & Actions & UndoState>()(
     }),
     {
       name: 'wedding-dashboard-v1',
-      version: 6,
+      version: 7,
       // Undo history is session-only — never sync it to the server/localStorage.
       partialize: (s) => {
         const { undoStack: _u, ...rest } = s as any;
@@ -954,6 +954,14 @@ export const useStore = create<AppState & Actions & UndoState>()(
           persisted.households = (persisted.households ?? []).map((h: any) => ({
             ...h,
             list: h.list ?? 'Invited',
+          }));
+        }
+        // v7: the "Maybe" list was retired — fold it into "B-list" (both are the
+        // buffer of households to invite only if space frees up).
+        if (version < 7) {
+          persisted.households = (persisted.households ?? []).map((h: any) => ({
+            ...h,
+            list: h.list === 'Maybe' ? 'B-list' : h.list ?? 'Invited',
           }));
         }
         return persisted;

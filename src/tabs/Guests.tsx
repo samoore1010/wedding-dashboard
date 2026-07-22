@@ -29,13 +29,12 @@ import { ImportWizard } from './guests/ImportWizard';
 
 const RSVP_FILTERS = ['All', 'Yes', 'Waiting', 'No'] as const;
 const SIDE_FILTERS = ['All', 'Bride', 'Groom'] as const;
-const LIST_FILTERS = ['All', 'Invited', 'B-list', 'Maybe'] as const;
+const LIST_FILTERS = ['All', 'Invited', 'B-list'] as const;
 const GROUP_BYS = ['Side', 'Relationship', 'List', 'None'] as const;
-const LISTS: GuestList[] = ['Invited', 'B-list', 'Maybe'];
+const LISTS: GuestList[] = ['Invited', 'B-list'];
 const listBadge: Record<GuestList, string> = {
   Invited: '',
   'B-list': 'bg-warning/15 text-warning',
-  Maybe: 'bg-bg text-muted border border-border',
 };
 const glist = (h: Household): GuestList => h.list ?? 'Invited';
 const GROUPS: GuestGroup[] = [
@@ -166,9 +165,9 @@ export function Guests() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <StatCard label="Households" value={stats.households} hint="invitations" />
         <StatCard label="Guests" value={stats.guests} hint="people total" />
-        <StatCard label="B-list" value={stats.bList} tone="warning" hint="people" />
         <StatCard label="Family" value={stats.family} tone="sage" hint="people" />
         <StatCard label="Friends" value={stats.friends} tone="rose" hint="people" />
+        <StatCard label="B-list" value={stats.bList} tone="warning" hint="people" />
       </div>
 
       <Card
@@ -715,7 +714,7 @@ function EditDrawer({
                     />
                   </Labeled>
                   <Labeled label="Guest list">
-                    <div className="grid grid-cols-3 rounded-lg border border-border overflow-hidden">
+                    <div className="grid grid-cols-2 rounded-lg border border-border overflow-hidden">
                       {LISTS.map((l) => (
                         <button
                           key={l}
@@ -725,9 +724,7 @@ function EditDrawer({
                             glist(h) === l
                               ? l === 'Invited'
                                 ? 'bg-primary text-white'
-                                : l === 'B-list'
-                                ? 'bg-warning text-white'
-                                : 'bg-primary-soft text-white'
+                                : 'bg-warning text-white'
                               : 'bg-surface text-muted hover:text-ink'
                           )}
                         >
