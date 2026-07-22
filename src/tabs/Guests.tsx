@@ -8,7 +8,11 @@ import {
   SlidersHorizontal,
   X,
   Plus,
+  ChevronDown,
+  FileText,
+  FileSpreadsheet,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useShallowStore } from '../store';
 import { Card } from '../components/ui/Card';
 import { StatCard } from '../components/ui/StatCard';
@@ -20,6 +24,7 @@ import { confirmAction } from '../components/ui/ConfirmDialog';
 import type { Household, Member, GuestGroup, GuestSide, GuestStatus, GuestList, MemberKind } from '../types';
 import { cn, householdSize, repliedCount, suggestLabel } from '../utils';
 import { exportGuestsCsv } from '../guests/csv';
+import { exportGuestsPdf, type PdfGroup } from '../guests/pdf';
 import { ImportWizard } from './guests/ImportWizard';
 
 const RSVP_FILTERS = ['All', 'Yes', 'Waiting', 'No'] as const;
@@ -57,8 +62,9 @@ const sideRail: Record<GuestSide, string> = { Bride: 'bg-rose', Groom: 'bg-sage'
 const rsvpDot: Record<GuestStatus, string> = { Yes: 'bg-success', No: 'bg-danger', Waiting: 'bg-warning' };
 
 export function Guests() {
-  const { households, addHousehold, updateHousehold, removeHousehold, addMember, updateMember, removeMember } =
+  const { settings, households, addHousehold, updateHousehold, removeHousehold, addMember, updateMember, removeMember } =
     useShallowStore((s) => ({
+      settings: s.settings,
       households: s.households,
       addHousehold: s.addHousehold,
       updateHousehold: s.updateHousehold,
@@ -152,6 +158,17 @@ export function Guests() {
     setOpenId(id);
   };
 
+  const onExportPdf = () => {
+    const ok = exportGuestsPdf({
+      groups: groups as PdfGroup[],
+      groupBy,
+      filters: { rsvp, side, list, search },
+      stats,
+      settings,
+    });
+    if (!ok) toast.error('Allow pop-ups for this site to export a PDF.');
+  };
+
   return (
     <div className="space-y-6">
       {/* Stats */}
@@ -170,9 +187,7 @@ export function Guests() {
             <Button variant="soft" size="sm" icon={<Upload size={14} />} onClick={() => setImportOpen(true)}>
               Import
             </Button>
-            <Button variant="outline" size="sm" icon={<Download size={14} />} onClick={() => exportGuestsCsv(households)}>
-              Export
-            </Button>
+            <ExportMenu onCsv={() => exportGuestsCsv(households)} onPdf={onExportPdf} />
             <Button icon={<UserPlus size={14} />} size="sm" onClick={openNew}>
               Add Household
             </Button>
@@ -318,6 +333,94 @@ export function Guests() {
 
       <ImportWizard open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
+  );
+}
+
+/* -------------------------------- Export menu ------------------------------ */
+
+function ExportMenu({ onCsv, onPdf }: { onCsv: () => void; onPdf: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const choose = (fn: () => void) => {
+    setOpen(false);
+    fn();
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <Button
+        variant="outline"
+        size="sm"
+        icon={<Download size={14} />}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        Export
+        <ChevronDown size={13} className={cn('transition-transform', open && 'rotate-180')} />
+      </Button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 z-30 mt-2 w-60 rounded-xl2 border border-border bg-surface shadow-lift p-1.5"
+        >
+          <ExportItem
+            icon={<FileSpreadsheet size={16} />}
+            title="Download CSV"
+            subtitle="Full spreadsheet — every guest, all fields"
+            onClick={() => choose(onCsv)}
+          />
+          <ExportItem
+            icon={<FileText size={16} />}
+            title="Download PDF"
+            subtitle="Printable — matches your current view"
+            onClick={() => choose(onPdf)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExportItem({
+  icon,
+  title,
+  subtitle,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      role="menuitem"
+      onClick={onClick}
+      className="w-full flex items-start gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-bg transition-colors"
+    >
+      <span className="mt-0.5 text-accent shrink-0">{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-ink">{title}</span>
+        <span className="block text-[11px] text-muted leading-snug">{subtitle}</span>
+      </span>
+    </button>
   );
 }
 
