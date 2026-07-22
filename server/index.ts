@@ -237,7 +237,7 @@ app.post('/api/import/categorize', async (c) => {
                 type: 'string',
                 enum: ['Couple Friends', 'Bride Family', 'Groom Family', 'Bride Friends', 'Groom Friends', 'Work', 'Other'],
               },
-              list: { type: 'string', enum: ['Invited', 'B-list', 'Maybe'] },
+              list: { type: 'string', enum: ['Invited', 'B-list'] },
               kind: { type: 'string', enum: ['adult', 'child'] },
               rsvp: { type: 'string', enum: ['Yes', 'No', 'Waiting'] },
             },

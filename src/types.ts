@@ -2,8 +2,8 @@ export type ThemeId = 'sage' | 'rose' | 'coastal' | 'burgundy' | 'modern';
 
 export type GuestStatus = 'Yes' | 'No' | 'Waiting';
 export type GuestSide = 'Both' | 'Bride' | 'Groom';
-/** Whether a household is firmly invited, a backup, or still undecided. */
-export type GuestList = 'Invited' | 'B-list' | 'Maybe';
+/** Whether a household is firmly invited or a backup to invite if space frees up. */
+export type GuestList = 'Invited' | 'B-list';
 export type GuestGroup =
   | 'Couple Friends'
   | 'Bride Family'

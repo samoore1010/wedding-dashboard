@@ -33,7 +33,7 @@ export function Overview({ onJump }: OverviewProps) {
       setNotes: s.setNotes,
     }));
 
-  // Headcount counts Invited households only (B-list/Maybe are a buffer).
+  // Headcount counts Invited households only (B-list is a buffer).
   const members = households.filter((h) => (h.list ?? 'Invited') === 'Invited').flatMap((h) => h.members);
   const total = members.length;
   const yes = members.filter((m) => m.rsvp === 'Yes').length;

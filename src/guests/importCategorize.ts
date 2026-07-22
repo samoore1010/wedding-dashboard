@@ -151,8 +151,7 @@ export const normGroup = (v: string, side: GuestSide): { group: GuestGroup; gues
 
 export const normList = (v: string): GuestList => {
   const s = norm(v);
-  if (/b.?list|backup|second|round 2|tier 2|maybe list/.test(s)) return 'B-list';
-  if (/maybe|tentative|unsure|possible|tier 3/.test(s)) return 'Maybe';
+  if (/b.?list|backup|second|round 2|tier 2|maybe|tentative|unsure|possible|tier 3/.test(s)) return 'B-list';
   return 'Invited';
 };
 
