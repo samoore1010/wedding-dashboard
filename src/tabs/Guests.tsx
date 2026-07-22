@@ -91,36 +91,27 @@ export function Guests() {
 
   const openHousehold = households.find((h) => h.id === openId) || null;
 
+  // All five summary counts are derived from the full, unfiltered `households`
+  // source array — never the `visible` (searched/filtered/grouped) view — so the
+  // widgets always reflect the complete dataset. `households` counts invitations;
+  // the other four count people (members). Family + Friends === Guests by design.
   const stats = useMemo(() => {
-    // Headcount counts Invited households only; B-list/Maybe are your buffer.
-    let yes = 0, waiting = 0, no = 0, bride = 0, groom = 0;
-    let invitedHouseholds = 0, bListPeople = 0, maybePeople = 0;
+    const isFamily = (g: GuestGroup) => g === 'Bride Family' || g === 'Groom Family';
+    let guests = 0, bList = 0, family = 0;
     for (const h of households) {
-      const l = glist(h);
-      if (l === 'B-list') { bListPeople += h.members.length; continue; }
-      if (l === 'Maybe') { maybePeople += h.members.length; continue; }
-      invitedHouseholds++;
-      for (const m of h.members) {
-        if (m.rsvp === 'Yes') yes++;
-        else if (m.rsvp === 'No') no++;
-        else waiting++;
-        if (m.rsvp !== 'No') {
-          if (h.side === 'Bride') bride++;
-          else if (h.side === 'Groom') groom++;
-          else { bride += 0.5; groom += 0.5; }
-        }
-      }
+      const size = h.members.length; // blank-named members still count
+      guests += size;
+      if (glist(h) === 'B-list') bList += size;
+      if (isFamily(h.group)) family += size;
     }
-    return { total: yes + waiting + no, yes, waiting, no, bride, groom, invitedHouseholds, bListPeople, maybePeople };
+    return {
+      households: households.length,
+      guests,
+      bList,
+      family,
+      friends: guests - family, // everyone is Family or Friends, never both
+    };
   }, [households]);
-
-  const totalHint = [
-    `${stats.invitedHouseholds} ${stats.invitedHouseholds === 1 ? 'household' : 'households'}`,
-    stats.bListPeople ? `${stats.bListPeople} B-list` : '',
-    stats.maybePeople ? `${stats.maybePeople} maybe` : '',
-  ]
-    .filter(Boolean)
-    .join(' · ');
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -173,11 +164,11 @@ export function Guests() {
     <div className="space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <StatCard label="Invited" value={stats.total} hint={totalHint} />
-        <StatCard label="Confirmed" value={stats.yes} tone="sage" />
-        <StatCard label="Awaiting" value={stats.waiting} tone="warning" />
-        <StatCard label="Declined" value={stats.no} tone="danger" />
-        <SideBalance bride={stats.bride} groom={stats.groom} />
+        <StatCard label="Households" value={stats.households} hint="invitations" />
+        <StatCard label="Guests" value={stats.guests} hint="people total" />
+        <StatCard label="B-list" value={stats.bList} tone="warning" hint="people" />
+        <StatCard label="Family" value={stats.family} tone="sage" hint="people" />
+        <StatCard label="Friends" value={stats.friends} tone="rose" hint="people" />
       </div>
 
       <Card
@@ -525,26 +516,6 @@ function FilterChip({ label, onClear }: { label: string; onClear: () => void }) 
         <X size={11} />
       </button>
     </span>
-  );
-}
-
-/* ------------------------------- Side balance ------------------------------ */
-
-function SideBalance({ bride, groom }: { bride: number; groom: number }) {
-  const total = bride + groom || 1;
-  const bpct = Math.round((bride / total) * 100);
-  return (
-    <div className="bg-surface border border-border rounded-xl2 p-4 shadow-soft flex flex-col justify-center col-span-2 lg:col-span-1">
-      <div className="text-[11px] font-semibold tracking-widest uppercase text-muted mb-2">Side Balance</div>
-      <div className="flex h-2.5 rounded-full overflow-hidden bg-border">
-        <div className="bg-rose" style={{ width: `${bpct}%` }} />
-        <div className="bg-sage" style={{ width: `${100 - bpct}%` }} />
-      </div>
-      <div className="flex justify-between text-[11px] mt-1.5 tabular-nums">
-        <span className="text-rose font-semibold">Bride {Math.round(bride)}</span>
-        <span className="text-sage font-semibold">{Math.round(groom)} Groom</span>
-      </div>
-    </div>
   );
 }
 
