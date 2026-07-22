@@ -22,12 +22,11 @@ export interface PdfExportContext {
   groupBy: string;
   filters: { rsvp: string; side: string; list: string; search: string };
   stats: {
-    total: number;
-    yes: number;
-    waiting: number;
-    no: number;
-    bride: number;
-    groom: number;
+    households: number;
+    guests: number;
+    bList: number;
+    family: number;
+    friends: number;
   };
   settings: WeddingSettings;
 }
@@ -168,9 +167,6 @@ const buildHtml = (ctx: PdfExportContext): string => {
   const filterText = describeFilters(ctx.filters);
   const totalHouseholds = ctx.groups.reduce((s, g) => s + g.items.length, 0);
 
-  const brideTotal = stats.bride + stats.groom || 1;
-  const bpct = Math.round((stats.bride / brideTotal) * 100);
-
   const contextLine = [
     `Grouped by ${groupBy}`,
     filterText || 'All households',
@@ -179,10 +175,11 @@ const buildHtml = (ctx: PdfExportContext): string => {
     .filter(Boolean)
     .join('  ·  ');
 
-  const statChip = (label: string, value: number | string, color: string) =>
+  const statChip = (label: string, value: number | string, color: string, sub = '') =>
     `<div class="stat">
       <div class="stat-val" style="color:${color}">${value}</div>
       <div class="stat-label">${esc(label)}</div>
+      ${sub ? `<div class="stat-sub">${esc(sub)}</div>` : ''}
     </div>`;
 
   const body = ctx.groups.length
@@ -234,14 +231,7 @@ const buildHtml = (ctx: PdfExportContext): string => {
     font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.08em;
     color: ${p.muted}; font-weight: 700; margin-top: 4px;
   }
-  .balance { grid-column: span 1; }
-  .balance-bar {
-    display: flex; height: 8px; border-radius: 999px; overflow: hidden;
-    background: ${p.border}; margin: 6px 0 4px;
-  }
-  .balance-legend {
-    display: flex; justify-content: space-between; font-size: 8.5px; font-weight: 700;
-  }
+  .stat-sub { font-size: 8px; color: ${p.muted}; margin-top: 2px; }
   .group { margin-bottom: 16px; break-inside: avoid; }
   .group-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .group-key {
@@ -311,21 +301,11 @@ const buildHtml = (ctx: PdfExportContext): string => {
     <div class="context">${esc(contextLine)}</div>
 
     <div class="stats">
-      ${statChip('Invited', stats.total, p.ink)}
-      ${statChip('Confirmed', stats.yes, p.sage)}
-      ${statChip('Awaiting', stats.waiting, p.warning)}
-      ${statChip('Declined', stats.no, p.danger)}
-      <div class="stat balance">
-        <div class="stat-label" style="margin-top:0">Side Balance</div>
-        <div class="balance-bar">
-          <div style="width:${bpct}%;background:${p.rose}"></div>
-          <div style="width:${100 - bpct}%;background:${p.sage}"></div>
-        </div>
-        <div class="balance-legend">
-          <span style="color:${p.rose}">Bride ${Math.round(stats.bride)}</span>
-          <span style="color:${p.sage}">${Math.round(stats.groom)} Groom</span>
-        </div>
-      </div>
+      ${statChip('Households', stats.households, p.ink, 'invitations')}
+      ${statChip('Guests', stats.guests, p.primary, 'people total')}
+      ${statChip('B-list', stats.bList, p.warning, 'people')}
+      ${statChip('Family', stats.family, p.sage, 'people')}
+      ${statChip('Friends', stats.friends, p.rose, 'people')}
     </div>
 
     ${body}
