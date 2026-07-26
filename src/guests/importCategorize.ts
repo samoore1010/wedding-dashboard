@@ -12,6 +12,7 @@ export interface StagedMember {
   rsvp: GuestStatus;
   meal: string;
   dietary: string;
+  email: string;
 }
 
 export type RowStatus = 'new' | 'duplicate' | 'update';
@@ -47,40 +48,36 @@ const norm = (s: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-/** Best-guess mapping of sheet headers onto our canonical fields. */
+/**
+ * Best-guess mapping of sheet headers onto our canonical fields. Every field
+ * gets a shot at an exact header/alias match before any field falls back to a
+ * fuzzy contains match — otherwise a sheet carrying both "Email" and "Guest
+ * Email" would hand whichever column came first to whichever field we happened
+ * to check first.
+ */
 export const autoMapColumns = (headers: string[]): ColumnMap => {
   const map: ColumnMap = {};
   const used = new Set<number>();
   const normHeaders = headers.map(norm);
 
-  for (const field of GUEST_FIELDS) {
-    const targets = [norm(field.header), ...field.aliases.map(norm)];
-    let best = -1;
-    // Exact header/alias match first…
-    for (let i = 0; i < normHeaders.length; i++) {
-      if (used.has(i)) continue;
-      if (targets.includes(normHeaders[i])) {
-        best = i;
-        break;
-      }
-    }
-    // …then a contains match (either direction).
-    if (best < 0) {
+  const claim = (matches: (header: string, targets: string[]) => boolean) => {
+    for (const field of GUEST_FIELDS) {
+      if (map[field.key] != null) continue;
+      const targets = [norm(field.header), ...field.aliases.map(norm)];
       for (let i = 0; i < normHeaders.length; i++) {
-        if (used.has(i)) continue;
         const h = normHeaders[i];
-        if (!h) continue;
-        if (targets.some((t) => t && (h.includes(t) || t.includes(h)))) {
-          best = i;
+        if (used.has(i) || !h) continue;
+        if (matches(h, targets)) {
+          map[field.key] = i;
+          used.add(i);
           break;
         }
       }
     }
-    if (best >= 0) {
-      map[field.key] = best;
-      used.add(best);
-    }
-  }
+  };
+
+  claim((h, targets) => targets.includes(h));
+  claim((h, targets) => targets.some((t) => t && (h.includes(t) || t.includes(h))));
   return map;
 };
 
@@ -164,6 +161,7 @@ interface RawGuest {
   rsvp: string;
   meal: string;
   dietary: string;
+  guestEmail: string;
   side: string;
   group: string;
   list: string;
@@ -188,6 +186,7 @@ const rawFromSheet = (sheet: Sheet, map: ColumnMap): RawGuest[] =>
       rsvp: getCell(row, map, 'rsvp'),
       meal: getCell(row, map, 'meal'),
       dietary: getCell(row, map, 'dietary'),
+      guestEmail: getCell(row, map, 'guestEmail'),
       side: getCell(row, map, 'side'),
       group: getCell(row, map, 'group'),
       list: getCell(row, map, 'list'),
@@ -227,8 +226,9 @@ export const groupIntoHouseholds = (raws: RawGuest[]): StagedHousehold[] => {
   let solo = 0;
   for (const r of raws) {
     let key: string;
+    const anyEmail = r.email || r.guestEmail;
     if (r.household) key = 'hh:' + norm(r.household);
-    else if (r.email) key = 'em:' + norm(r.email);
+    else if (anyEmail) key = 'em:' + norm(anyEmail);
     else if (r.address) key = 'ad:' + norm(r.address) + '|' + surnameOf(r.name);
     else key = 'solo:' + solo++;
     buckets.set(key, [...(buckets.get(key) ?? []), r]);
@@ -238,15 +238,18 @@ export const groupIntoHouseholds = (raws: RawGuest[]): StagedHousehold[] => {
   for (const group of buckets.values()) {
     const members: StagedMember[] = [];
     for (const r of group) {
-      for (const nm of splitNames(r.name || r.household)) {
+      // One row can carry two names ("John & Jane Smith") but only ever one
+      // email — it belongs to the first person named, not to both.
+      splitNames(r.name || r.household).forEach((nm, i) => {
         members.push({
           name: nm,
           kind: normKind(r.kind),
           rsvp: normRsvp(r.rsvp),
           meal: r.meal,
           dietary: r.dietary,
+          email: i === 0 ? r.guestEmail : '',
         });
-      }
+      });
     }
     if (!members.length) continue;
 
@@ -300,8 +303,9 @@ const nameKey = (name: string) =>
 
 /**
  * Flag staged households that collide with the existing list. A match on any
- * member name (order-insensitive) or on a shared non-empty email marks the row
- * as a duplicate so the couple can skip or merge it instead of double-adding.
+ * member name (order-insensitive) or on a shared non-empty email — the
+ * household's or any one person's — marks the row as a duplicate so the couple
+ * can skip or merge it instead of double-adding.
  */
 export const markDuplicates = (staged: StagedHousehold[], existing: Household[]): void => {
   const byName = new Map<string, string>();
@@ -309,13 +313,18 @@ export const markDuplicates = (staged: StagedHousehold[], existing: Household[])
   for (const h of existing) {
     if (h.email) byEmail.set(norm(h.email), h.id);
     for (const m of h.members) {
+      if (m.email) byEmail.set(norm(m.email), h.id);
       const k = nameKey(m.name);
       if (k) byName.set(k, h.id);
     }
   }
   for (const s of staged) {
     let match: string | undefined;
-    if (s.email) match = byEmail.get(norm(s.email));
+    for (const e of [s.email, ...s.members.map((m) => m.email)]) {
+      if (!e) continue;
+      match = byEmail.get(norm(e));
+      if (match) break;
+    }
     if (!match) {
       for (const m of s.members) {
         const hit = byName.get(nameKey(m.name));

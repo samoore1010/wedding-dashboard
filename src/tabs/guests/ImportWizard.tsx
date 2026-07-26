@@ -163,6 +163,7 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
           rsvp: m.rsvp,
           meal: m.meal,
           dietary: m.dietary,
+          email: m.email,
         })),
       }))
     );

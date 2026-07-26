@@ -37,6 +37,7 @@ const makeMember = (patch?: Partial<Member>): Member => ({
   rsvp: 'Waiting',
   meal: '',
   dietary: '',
+  email: '',
   ...patch,
 });
 
@@ -874,7 +875,7 @@ export const useStore = create<AppState & Actions & UndoState>()(
     }),
     {
       name: 'wedding-dashboard-v1',
-      version: 7,
+      version: 8,
       // Undo history is session-only — never sync it to the server/localStorage.
       partialize: (s) => {
         const { undoStack: _u, ...rest } = s as any;
@@ -962,6 +963,13 @@ export const useStore = create<AppState & Actions & UndoState>()(
           persisted.households = (persisted.households ?? []).map((h: any) => ({
             ...h,
             list: h.list === 'Maybe' ? 'B-list' : h.list ?? 'Invited',
+          }));
+        }
+        // v8: people gained their own email alongside the household contact one.
+        if (version < 8) {
+          persisted.households = (persisted.households ?? []).map((h: any) => ({
+            ...h,
+            members: (h.members ?? []).map((m: any) => ({ ...m, email: m.email ?? '' })),
           }));
         }
         return persisted;

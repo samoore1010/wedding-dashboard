@@ -7,7 +7,8 @@ import type { GuestGroup, GuestList, GuestSide, GuestStatus, MemberKind } from '
  *   2. the downloadable blank template,
  *   3. the set of fields the import wizard maps incoming columns onto.
  *
- * Each row in the table is ONE person. Household-level fields (side, list,
+ * Each row in the table is ONE person. Member-level fields (name, RSVP, meal,
+ * their own email, …) are that person's; household-level fields (side, list,
  * address, …) repeat on every member's row — that is the shape most couples
  * already keep their guest spreadsheet in, and it round-trips losslessly.
  */
@@ -18,6 +19,7 @@ export type GuestFieldKey =
   | 'rsvp'
   | 'meal'
   | 'dietary'
+  | 'guestEmail'
   | 'side'
   | 'group'
   | 'list'
@@ -73,6 +75,12 @@ export const GUEST_FIELDS: GuestField[] = [
     header: 'Dietary',
     level: 'member',
     aliases: ['dietary', 'dietary needs', 'allergies', 'restrictions', 'dietary restrictions', 'notes (food)'],
+  },
+  {
+    key: 'guestEmail',
+    header: 'Guest Email',
+    level: 'member',
+    aliases: ['guest email', 'personal email', 'their email', 'email (guest)', 'attendee email'],
   },
   {
     key: 'side',

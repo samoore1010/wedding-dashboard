@@ -82,6 +82,7 @@ const memberSchema = obj(
     rsvp: enumStr(RSVPS, 'RSVP status (default Waiting)'),
     meal: enumStr(MEALS, 'Meal choice, if known'),
     dietary: str('Dietary notes / allergies'),
+    email: str("This person's own email address"),
   },
   ['name']
 );
@@ -154,6 +155,7 @@ export const TOOLS: AssistantTool[] = [
         rsvp: (m.rsvp as GuestStatus) || 'Waiting',
         meal: m.meal || '',
         dietary: m.dietary || '',
+        email: m.email || '',
       }));
       S().addHousehold({
         label: i.label || '',
@@ -223,6 +225,7 @@ export const TOOLS: AssistantTool[] = [
         rsvp: enumStr(RSVPS),
         meal: enumStr(MEALS),
         dietary: str(),
+        email: str("This person's own email address"),
       },
       ['householdId', 'name']
     ),
@@ -235,6 +238,7 @@ export const TOOLS: AssistantTool[] = [
         rsvp: (i.rsvp as GuestStatus) || 'Waiting',
         meal: i.meal || '',
         dietary: i.dietary || '',
+        email: i.email || '',
       });
       return `Added ${i.name} to "${label('households', i.householdId)}".`;
     },
@@ -242,7 +246,7 @@ export const TOOLS: AssistantTool[] = [
   {
     name: 'update_member',
     kind: 'write',
-    description: 'Update one person: their name, adult/child, RSVP, meal, or dietary notes.',
+    description: 'Update one person: their name, adult/child, RSVP, meal, dietary notes, or email.',
     input_schema: obj(
       {
         householdId: str('Household id'),
@@ -252,6 +256,7 @@ export const TOOLS: AssistantTool[] = [
         rsvp: enumStr(RSVPS),
         meal: enumStr(MEALS),
         dietary: str(),
+        email: str("This person's own email address"),
       },
       ['householdId', 'memberId']
     ),
@@ -1134,6 +1139,7 @@ function readSection(section: string): unknown {
             rsvp: m.rsvp,
             meal: m.meal,
             dietary: m.dietary,
+            email: m.email,
           })),
         })),
       };

@@ -102,6 +102,7 @@ export const aiStageImport = async (
       rsvp: oneOf<GuestStatus>(g.rsvp, ['Yes', 'No', 'Waiting'], 'Waiting'),
       meal: cell(g.index, 'meal'),
       dietary: cell(g.index, 'dietary'),
+      email: cell(g.index, 'guestEmail'),
     }));
 
     const side = oneOf<GuestSide>(group[0].side, SIDES, 'Both');
