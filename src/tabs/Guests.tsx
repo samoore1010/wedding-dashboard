@@ -24,6 +24,7 @@ import { confirmAction } from '../components/ui/ConfirmDialog';
 import type { Household, Member, GuestGroup, GuestSide, GuestStatus, GuestList, MemberKind } from '../types';
 import { cn, householdSize, repliedCount, suggestLabel } from '../utils';
 import { exportGuestsCsv } from '../guests/csv';
+import { toContacts } from '../guests/contacts';
 import { exportGuestsPdf, type PdfGroup } from '../guests/pdf';
 import { ImportWizard } from './guests/ImportWizard';
 
@@ -123,9 +124,9 @@ export function Guests() {
           h.label,
           h.group,
           h.notes,
-          h.email,
-          h.phone,
-          ...h.members.flatMap((m) => [m.name, m.email, m.phone]),
+          ...h.emails,
+          ...h.phones,
+          ...h.members.flatMap((m) => [m.name, ...m.emails, ...m.phones]),
         ]
           .join(' ')
           .toLowerCase();
@@ -763,22 +764,24 @@ function EditDrawer({
                         ))}
                       </Select>
                     </Labeled>
-                    <Labeled label="Household email">
-                      <Input
-                        type="email"
-                        value={h.email}
-                        onChange={(e) => onUpdateHousehold({ email: e.target.value })}
-                        placeholder="name@email.com"
-                      />
-                    </Labeled>
-                    <Labeled label="Household phone">
-                      <Input
-                        type="tel"
-                        value={h.phone}
-                        onChange={(e) => onUpdateHousehold({ phone: e.target.value })}
-                        placeholder="(555) 123-4567"
-                      />
-                    </Labeled>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <ContactList
+                      label="Household emails"
+                      type="email"
+                      placeholder="name@email.com"
+                      addLabel="Add email"
+                      values={h.emails}
+                      onChange={(emails) => onUpdateHousehold({ emails })}
+                    />
+                    <ContactList
+                      label="Household phones"
+                      type="tel"
+                      placeholder="(555) 123-4567"
+                      addLabel="Add phone"
+                      values={h.phones}
+                      onChange={(phones) => onUpdateHousehold({ phones })}
+                    />
                   </div>
                   <Labeled label="Invitation">
                     <Select
@@ -881,21 +884,93 @@ function MemberRow({
         />
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <Input
+        <ContactList
           type="email"
-          value={m.email}
-          onChange={(e) => onChange({ email: e.target.value })}
           placeholder="Email"
-          className="text-xs h-8 py-0"
+          addLabel="Add email"
+          compact
+          values={m.emails}
+          onChange={(emails) => onChange({ emails })}
         />
-        <Input
+        <ContactList
           type="tel"
-          value={m.phone}
-          onChange={(e) => onChange({ phone: e.target.value })}
           placeholder="Phone"
-          className="text-xs h-8 py-0"
+          addLabel="Add phone"
+          compact
+          values={m.phones}
+          onChange={(phones) => onChange({ phones })}
         />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Editor for one multi-value contact list (emails or phones). Always shows at
+ * least one box; blurring normalises the list, so pasting "555-0100, 555-0101"
+ * into a single box splits it into two entries rather than storing it as one.
+ */
+function ContactList({
+  label,
+  values,
+  type,
+  placeholder,
+  addLabel,
+  compact = false,
+  onChange,
+}: {
+  label?: string;
+  values: string[];
+  type: 'email' | 'tel';
+  placeholder: string;
+  addLabel: string;
+  compact?: boolean;
+  onChange: (values: string[]) => void;
+}) {
+  const shown = values.length ? values : [''];
+  const same = (a: string[], b: string[]) => a.length === b.length && a.every((v, i) => v === b[i]);
+  const normalize = () => {
+    const next = toContacts(shown);
+    if (!same(next, values)) onChange(next);
+  };
+
+  const rows = (
+    <div className="space-y-1.5">
+      {shown.map((v, i) => (
+        <div key={i} className="flex items-center gap-1">
+          <Input
+            type={type}
+            value={v}
+            onChange={(e) => onChange(shown.map((x, j) => (j === i ? e.target.value : x)))}
+            onBlur={normalize}
+            placeholder={placeholder}
+            className={cn('flex-1 min-w-0', compact && 'text-xs h-8 py-0')}
+          />
+          {shown.length > 1 && (
+            <button
+              onClick={() => onChange(shown.filter((_, j) => j !== i))}
+              className="shrink-0 p-1 text-muted hover:text-danger rounded"
+              aria-label={`Remove ${placeholder.toLowerCase()}`}
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      ))}
+      <button
+        onClick={() => onChange([...toContacts(shown), ''])}
+        className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-accent"
+      >
+        <Plus size={11} /> {addLabel}
+      </button>
+    </div>
+  );
+
+  if (!label) return rows;
+  return (
+    <div>
+      <span className="text-[11px] font-semibold text-muted mb-1 block">{label}</span>
+      {rows}
     </div>
   );
 }

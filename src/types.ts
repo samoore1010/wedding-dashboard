@@ -26,10 +26,13 @@ export interface Member {
   rsvp: GuestStatus;
   meal: string;
   dietary: string;
-  /** This person's own email. The household keeps a separate contact email. */
-  email: string;
-  /** This person's own phone. The household keeps a separate contact phone. */
-  phone: string;
+  /**
+   * This person's own emails / phone numbers — people routinely have more than
+   * one (work + personal, mobile + landline). The household keeps its own
+   * separate contact lists for whoever the invitation is addressed to.
+   */
+  emails: string[];
+  phones: string[];
 }
 
 /**
@@ -45,8 +48,9 @@ export interface Household {
   group: GuestGroup;
   /** Firm invite, backup (invite if space frees up), or undecided. */
   list: GuestList;
-  email: string;
-  phone: string;
+  /** Contact details for the invitation itself; any number of each. */
+  emails: string[];
+  phones: string[];
   address: string;
   inviteSent: boolean;
   notes: string;

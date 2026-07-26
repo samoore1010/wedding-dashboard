@@ -64,7 +64,14 @@ export function WeddingParty() {
       .flatMap((h) =>
         h.members
           .filter((m) => m.name.trim())
-          .map((m) => ({ householdId: h.id, memberId: m.id, name: m.name, side: h.side, contact: h.email || '' }))
+          .map((m) => ({
+            householdId: h.id,
+            memberId: m.id,
+            name: m.name,
+            side: h.side,
+            // Their own details first, falling back to the household's.
+            contact: m.emails[0] || m.phones[0] || h.emails[0] || h.phones[0] || '',
+          }))
       )
       .filter((p) => !assignedMemberIds.has(p.memberId))
       .filter((p) => !q || p.name.toLowerCase().includes(q));

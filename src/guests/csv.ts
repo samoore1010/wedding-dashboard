@@ -1,5 +1,6 @@
 import type { Household } from '../types';
 import { GUEST_FIELDS, GUEST_HEADERS } from './schema';
+import { joinContacts } from './contacts';
 import { suggestLabel } from '../utils';
 
 /** Escape one CSV cell — wrap in quotes and double any embedded quotes. */
@@ -45,10 +46,12 @@ export const householdsToRows = (households: Household[]): string[][] => {
               return m.meal;
             case 'dietary':
               return m.dietary;
+            // Several values share one cell, separated by "; " — the same shape
+            // the importer reads back, so a round-trip loses nothing.
             case 'guestEmail':
-              return m.email;
+              return joinContacts(m.emails);
             case 'guestPhone':
-              return m.phone;
+              return joinContacts(m.phones);
             case 'side':
               return h.side;
             case 'group':
@@ -58,9 +61,9 @@ export const householdsToRows = (households: Household[]): string[][] => {
             case 'inviteSent':
               return h.inviteSent ? 'Yes' : 'No';
             case 'email':
-              return h.email;
+              return joinContacts(h.emails);
             case 'phone':
-              return h.phone;
+              return joinContacts(h.phones);
             case 'address':
               return h.address;
             case 'table':
@@ -87,11 +90,15 @@ export const exportGuestsCsv = (households: Household[]) => {
   download(toCsv(householdsToRows(households)), `guest-list-${stamp()}.csv`);
 };
 
-/** A blank, self-documenting template with two illustrative example rows. */
+/**
+ * A blank, self-documenting template with a few illustrative example rows.
+ * The Smiths show the multi-value shape: put as many emails or numbers in a
+ * cell as you have, separated by ";", "/" or ",".
+ */
 export const downloadGuestTemplate = () => {
   const rows: string[][] = [
     GUEST_HEADERS,
-    ['The Smith Family', 'John Smith', 'Adult', 'Yes', 'Beef', '', 'john@email.com', '555-0101', 'Groom', 'Groom Family', 'Invited', 'Yes', 'jsmith@email.com', '555-0100', '12 Oak St, Denver CO', '', ''],
+    ['The Smith Family', 'John Smith', 'Adult', 'Yes', 'Beef', '', 'john@email.com; john.smith@work.com', '555-0101; 555-0111', 'Groom', 'Groom Family', 'Invited', 'Yes', 'jsmith@email.com', '555-0100', '12 Oak St, Denver CO', '', ''],
     ['The Smith Family', 'Mary Smith', 'Adult', 'Yes', 'Fish', 'Gluten-free', 'mary@email.com', '555-0102', 'Groom', 'Groom Family', 'Invited', 'Yes', 'jsmith@email.com', '555-0100', '12 Oak St, Denver CO', '', ''],
     ['Jane Doe', 'Jane Doe', 'Adult', 'Waiting', '', '', 'jane@email.com', '555-0199', 'Bride', 'Bride Friends', 'Invited', 'No', 'jane@email.com', '', '', '', 'College roommate'],
   ];

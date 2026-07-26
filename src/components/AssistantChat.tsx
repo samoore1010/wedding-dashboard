@@ -12,6 +12,7 @@ import {
   Loader2,
   FileText,
   Image as ImageIcon,
+  Table2,
 } from 'lucide-react';
 import { runAgent, type Attachment, type ProposedChange } from '../assistant/agent';
 import { getAssistantStatus } from '../assistant/api';
@@ -30,10 +31,31 @@ const SUGGESTIONS = [
   'Add the Johnson family (2 adults, 1 kid) on the bride’s side',
   'How many guests have RSVP’d yes?',
   'Add a venue from this link: ',
+  'Here’s our guest spreadsheet — add the phone numbers',
   'Set the photography budget to 15%',
 ];
 
 const MAX_FILE = 8_000_000;
+
+const SHEET_EXT = /\.(csv|tsv|xlsx|xlsm|xls)$/i;
+const isSheet = (f: File) =>
+  SHEET_EXT.test(f.name) ||
+  f.type === 'text/csv' ||
+  f.type.includes('spreadsheet') ||
+  f.type.includes('excel');
+
+/** Read a .csv/.xlsx in the browser and hand it to the model as CSV text. */
+async function sheetToAttachment(file: File): Promise<Attachment> {
+  const [{ parseFile }, { toCsv }] = await Promise.all([
+    import('../guests/importParse'),
+    import('../guests/csv'),
+  ]);
+  const sheet = await parseFile(file);
+  if (!sheet.headers.length || !sheet.rows.length) throw new Error('empty');
+  // toCsv writes a BOM for Excel's benefit; the model doesn't need it.
+  const text = toCsv([sheet.headers, ...sheet.rows]).replace(/^﻿/, '');
+  return { kind: 'sheet', name: file.name, text, rows: sheet.rows.length };
+}
 
 function fileToAttachment(file: File): Promise<Attachment> {
   return new Promise((resolve, reject) => {
@@ -89,14 +111,26 @@ export function AssistantChat() {
         push({ id: uid(), kind: 'error', text: `${f.name} is too large (max 8 MB).` });
         continue;
       }
-      if (!/^image\//.test(f.type) && f.type !== 'application/pdf') {
-        push({ id: uid(), kind: 'error', text: `${f.name}: only images and PDFs are supported.` });
+      const sheet = isSheet(f);
+      if (!sheet && !/^image\//.test(f.type) && f.type !== 'application/pdf') {
+        push({
+          id: uid(),
+          kind: 'error',
+          text: `${f.name}: only images, PDFs and spreadsheets (.csv, .xlsx) are supported.`,
+        });
         continue;
       }
       try {
-        next.push(await fileToAttachment(f));
-      } catch {
-        push({ id: uid(), kind: 'error', text: `Could not read ${f.name}.` });
+        next.push(sheet ? await sheetToAttachment(f) : await fileToAttachment(f));
+      } catch (e: any) {
+        push({
+          id: uid(),
+          kind: 'error',
+          text:
+            e?.message === 'empty'
+              ? `${f.name} looks empty — no rows found.`
+              : `Could not read ${f.name}.`,
+        });
       }
     }
     if (next.length) setPendingFiles((p) => [...p, ...next]);
@@ -255,7 +289,13 @@ export function AssistantChat() {
                   key={i}
                   className="inline-flex items-center gap-1 text-[11px] bg-bg border border-border rounded-full pl-2 pr-1 py-0.5"
                 >
-                  {f.kind === 'pdf' ? <FileText size={11} /> : <ImageIcon size={11} />}
+                  {f.kind === 'pdf' ? (
+                    <FileText size={11} />
+                  ) : f.kind === 'sheet' ? (
+                    <Table2 size={11} />
+                  ) : (
+                    <ImageIcon size={11} />
+                  )}
                   <span className="max-w-[120px] truncate">{f.name}</span>
                   <button
                     onClick={() => setPendingFiles((p) => p.filter((_, j) => j !== i))}
@@ -277,7 +317,7 @@ export function AssistantChat() {
                 <input
                   type="file"
                   className="hidden"
-                  accept="image/*,application/pdf"
+                  accept="image/*,application/pdf,.csv,.tsv,.xlsx,.xlsm,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   multiple
                   onChange={(e) => {
                     handleFiles(e.target.files);
