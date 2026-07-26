@@ -28,6 +28,8 @@ export interface Member {
   dietary: string;
   /** This person's own email. The household keeps a separate contact email. */
   email: string;
+  /** This person's own phone. The household keeps a separate contact phone. */
+  phone: string;
 }
 
 /**
@@ -44,6 +46,7 @@ export interface Household {
   /** Firm invite, backup (invite if space frees up), or undecided. */
   list: GuestList;
   email: string;
+  phone: string;
   address: string;
   inviteSent: boolean;
   notes: string;

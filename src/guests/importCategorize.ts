@@ -13,6 +13,7 @@ export interface StagedMember {
   meal: string;
   dietary: string;
   email: string;
+  phone: string;
 }
 
 export type RowStatus = 'new' | 'duplicate' | 'update';
@@ -25,6 +26,7 @@ export interface StagedHousehold {
   group: GuestGroup;
   list: GuestList;
   email: string;
+  phone: string;
   address: string;
   inviteSent: boolean;
   notes: string;
@@ -162,11 +164,13 @@ interface RawGuest {
   meal: string;
   dietary: string;
   guestEmail: string;
+  guestPhone: string;
   side: string;
   group: string;
   list: string;
   inviteSent: string;
   email: string;
+  phone: string;
   address: string;
   table: string;
   notes: string;
@@ -187,11 +191,13 @@ const rawFromSheet = (sheet: Sheet, map: ColumnMap): RawGuest[] =>
       meal: getCell(row, map, 'meal'),
       dietary: getCell(row, map, 'dietary'),
       guestEmail: getCell(row, map, 'guestEmail'),
+      guestPhone: getCell(row, map, 'guestPhone'),
       side: getCell(row, map, 'side'),
       group: getCell(row, map, 'group'),
       list: getCell(row, map, 'list'),
       inviteSent: getCell(row, map, 'inviteSent'),
       email: getCell(row, map, 'email'),
+      phone: getCell(row, map, 'phone'),
       address: getCell(row, map, 'address'),
       table: getCell(row, map, 'table'),
       notes: getCell(row, map, 'notes'),
@@ -239,7 +245,7 @@ export const groupIntoHouseholds = (raws: RawGuest[]): StagedHousehold[] => {
     const members: StagedMember[] = [];
     for (const r of group) {
       // One row can carry two names ("John & Jane Smith") but only ever one
-      // email — it belongs to the first person named, not to both.
+      // email/phone — they belong to the first person named, not to both.
       splitNames(r.name || r.household).forEach((nm, i) => {
         members.push({
           name: nm,
@@ -248,6 +254,7 @@ export const groupIntoHouseholds = (raws: RawGuest[]): StagedHousehold[] => {
           meal: r.meal,
           dietary: r.dietary,
           email: i === 0 ? r.guestEmail : '',
+          phone: i === 0 ? r.guestPhone : '',
         });
       });
     }
@@ -269,6 +276,7 @@ export const groupIntoHouseholds = (raws: RawGuest[]): StagedHousehold[] => {
       group: grp,
       list: normList(pick('list')),
       email: pick('email'),
+      phone: pick('phone'),
       address: pick('address'),
       inviteSent: normBool(pick('inviteSent')),
       notes: pick('notes'),

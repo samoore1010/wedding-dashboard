@@ -153,6 +153,7 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
         group: r.group,
         list: r.list,
         email: r.email,
+        phone: r.phone,
         address: r.address,
         inviteSent: r.inviteSent,
         notes: r.notes,
@@ -164,6 +165,7 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
           meal: m.meal,
           dietary: m.dietary,
           email: m.email,
+          phone: m.phone,
         })),
       }))
     );

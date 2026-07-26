@@ -47,6 +47,8 @@ export const householdsToRows = (households: Household[]): string[][] => {
               return m.dietary;
             case 'guestEmail':
               return m.email;
+            case 'guestPhone':
+              return m.phone;
             case 'side':
               return h.side;
             case 'group':
@@ -57,6 +59,8 @@ export const householdsToRows = (households: Household[]): string[][] => {
               return h.inviteSent ? 'Yes' : 'No';
             case 'email':
               return h.email;
+            case 'phone':
+              return h.phone;
             case 'address':
               return h.address;
             case 'table':
@@ -87,9 +91,9 @@ export const exportGuestsCsv = (households: Household[]) => {
 export const downloadGuestTemplate = () => {
   const rows: string[][] = [
     GUEST_HEADERS,
-    ['The Smith Family', 'John Smith', 'Adult', 'Yes', 'Beef', '', 'john@email.com', 'Groom', 'Groom Family', 'Invited', 'Yes', 'jsmith@email.com', '12 Oak St, Denver CO', '', ''],
-    ['The Smith Family', 'Mary Smith', 'Adult', 'Yes', 'Fish', 'Gluten-free', 'mary@email.com', 'Groom', 'Groom Family', 'Invited', 'Yes', 'jsmith@email.com', '12 Oak St, Denver CO', '', ''],
-    ['Jane Doe', 'Jane Doe', 'Adult', 'Waiting', '', '', 'jane@email.com', 'Bride', 'Bride Friends', 'Invited', 'No', 'jane@email.com', '', '', 'College roommate'],
+    ['The Smith Family', 'John Smith', 'Adult', 'Yes', 'Beef', '', 'john@email.com', '555-0101', 'Groom', 'Groom Family', 'Invited', 'Yes', 'jsmith@email.com', '555-0100', '12 Oak St, Denver CO', '', ''],
+    ['The Smith Family', 'Mary Smith', 'Adult', 'Yes', 'Fish', 'Gluten-free', 'mary@email.com', '555-0102', 'Groom', 'Groom Family', 'Invited', 'Yes', 'jsmith@email.com', '555-0100', '12 Oak St, Denver CO', '', ''],
+    ['Jane Doe', 'Jane Doe', 'Adult', 'Waiting', '', '', 'jane@email.com', '555-0199', 'Bride', 'Bride Friends', 'Invited', 'No', 'jane@email.com', '', '', '', 'College roommate'],
   ];
   download(toCsv(rows), 'guest-list-template.csv');
 };

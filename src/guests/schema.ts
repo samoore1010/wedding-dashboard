@@ -20,11 +20,13 @@ export type GuestFieldKey =
   | 'meal'
   | 'dietary'
   | 'guestEmail'
+  | 'guestPhone'
   | 'side'
   | 'group'
   | 'list'
   | 'inviteSent'
   | 'email'
+  | 'phone'
   | 'address'
   | 'table'
   | 'notes';
@@ -83,6 +85,12 @@ export const GUEST_FIELDS: GuestField[] = [
     aliases: ['guest email', 'personal email', 'their email', 'email (guest)', 'attendee email'],
   },
   {
+    key: 'guestPhone',
+    header: 'Guest Phone',
+    level: 'member',
+    aliases: ['guest phone', 'personal phone', 'their phone', 'phone (guest)', 'guest mobile', 'attendee phone'],
+  },
+  {
     key: 'side',
     header: 'Side',
     level: 'household',
@@ -111,6 +119,12 @@ export const GUEST_FIELDS: GuestField[] = [
     header: 'Email',
     level: 'household',
     aliases: ['email', 'e-mail', 'email address', 'contact email'],
+  },
+  {
+    key: 'phone',
+    header: 'Phone',
+    level: 'household',
+    aliases: ['phone', 'phone number', 'telephone', 'mobile', 'cell', 'cell phone', 'contact phone', 'tel'],
   },
   {
     key: 'address',
