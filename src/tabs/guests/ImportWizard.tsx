@@ -152,8 +152,8 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
         side: r.side,
         group: r.group,
         list: r.list,
-        email: r.email,
-        phone: r.phone,
+        emails: r.emails,
+        phones: r.phones,
         address: r.address,
         inviteSent: r.inviteSent,
         notes: r.notes,
@@ -164,8 +164,8 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
           rsvp: m.rsvp,
           meal: m.meal,
           dietary: m.dietary,
-          email: m.email,
-          phone: m.phone,
+          emails: m.emails,
+          phones: m.phones,
         })),
       }))
     );
@@ -528,7 +528,7 @@ function ReviewRow({ row: r, onPatch }: { row: Row; onPatch: (p: Partial<Row>) =
           </div>
           <div className="text-xs text-muted mt-1">
             {r.members.map((m) => m.name).join(', ')}
-            {r.email && <span> · {r.email}</span>}
+            {r.emails.length > 0 && <span> · {r.emails.join(', ')}</span>}
           </div>
         </div>
 

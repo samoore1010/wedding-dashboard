@@ -7,12 +7,15 @@ import { anthropicToolDefs, TOOL_BY_NAME } from './tools';
 import { buildSystemPrompt } from './systemPrompt';
 import { useStore } from '../store';
 
-export interface Attachment {
-  kind: 'image' | 'pdf';
-  media_type: string;
-  data: string; // base64, no data: prefix
-  name: string;
-}
+export type Attachment =
+  /** media_type + base64 data, no `data:` prefix. */
+  | { kind: 'image'; media_type: string; data: string; name: string }
+  | { kind: 'pdf'; media_type: string; data: string; name: string }
+  /** A .csv/.xlsx read in the browser and handed to the model as CSV text. */
+  | { kind: 'sheet'; name: string; text: string; rows: number };
+
+/** Guard rail so a giant workbook can't blow up the request. */
+const MAX_SHEET_CHARS = 200_000;
 
 export interface ProposedChange {
   toolUseId: string;
@@ -69,8 +72,19 @@ export async function runAgent(
   for (const a of attachments) {
     if (a.kind === 'image') {
       userContent.push({ type: 'image', source: { type: 'base64', media_type: a.media_type, data: a.data } });
-    } else {
+    } else if (a.kind === 'pdf') {
       userContent.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: a.data } });
+    } else {
+      const truncated = a.text.length > MAX_SHEET_CHARS;
+      userContent.push({
+        type: 'text',
+        text:
+          `Attached spreadsheet "${a.name}" (${a.rows} ${a.rows === 1 ? 'row' : 'rows'}), as CSV:\n\n` +
+          '```csv\n' +
+          a.text.slice(0, MAX_SHEET_CHARS) +
+          '\n```' +
+          (truncated ? '\n\n(Truncated — only the first part of the file is shown.)' : ''),
+      });
     }
   }
   userContent.push({

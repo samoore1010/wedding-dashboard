@@ -29,6 +29,7 @@ import { DEFAULT_STATE } from './defaults';
 import { defaultVenuePlan, makeVenueField, makeVenueHotel, makeVenueSection } from './venuePlan';
 import { defaultWeddingParty, makePartyGroup, makePartyMember } from './weddingParty';
 import { uid } from './utils';
+import { cleanContacts, toContacts } from './guests/contacts';
 
 const makeMember = (patch?: Partial<Member>): Member => ({
   id: 'm_' + uid(),
@@ -37,8 +38,8 @@ const makeMember = (patch?: Partial<Member>): Member => ({
   rsvp: 'Waiting',
   meal: '',
   dietary: '',
-  email: '',
-  phone: '',
+  emails: [],
+  phones: [],
   ...patch,
 });
 
@@ -282,8 +283,8 @@ export const useStore = create<AppState & Actions & UndoState>()(
               group: 'Couple Friends',
               side: 'Both',
               list: 'Invited',
-              email: '',
-              phone: '',
+              emails: [],
+              phones: [],
               address: '',
               inviteSent: false,
               notes: '',
@@ -353,8 +354,8 @@ export const useStore = create<AppState & Actions & UndoState>()(
           group: 'Couple Friends',
           side: 'Both',
           list: 'Invited',
-          email: '',
-          phone: '',
+          emails: [],
+          phones: [],
           address: '',
           inviteSent: false,
           notes: '',
@@ -878,7 +879,7 @@ export const useStore = create<AppState & Actions & UndoState>()(
     }),
     {
       name: 'wedding-dashboard-v1',
-      version: 9,
+      version: 10,
       // Undo history is session-only — never sync it to the server/localStorage.
       partialize: (s) => {
         const { undoStack: _u, ...rest } = s as any;
@@ -982,6 +983,28 @@ export const useStore = create<AppState & Actions & UndoState>()(
             phone: h.phone ?? '',
             members: (h.members ?? []).map((m: any) => ({ ...m, phone: m.phone ?? '' })),
           }));
+        }
+        // v10: one email/phone each became a list of them. Fold the old single
+        // values in; a cell may itself hold several ("555-0100 / 555-0101").
+        if (version < 10) {
+          const list = (single: any, existing: any) =>
+            Array.isArray(existing) ? cleanContacts(existing) : toContacts(single);
+          persisted.households = (persisted.households ?? []).map((h: any) => {
+            const { email, phone, ...rest } = h;
+            return {
+              ...rest,
+              emails: list(email, h.emails),
+              phones: list(phone, h.phones),
+              members: (h.members ?? []).map((m: any) => {
+                const { email: mEmail, phone: mPhone, ...mRest } = m;
+                return {
+                  ...mRest,
+                  emails: list(mEmail, m.emails),
+                  phones: list(mPhone, m.phones),
+                };
+              }),
+            };
+          });
         }
         return persisted;
       },

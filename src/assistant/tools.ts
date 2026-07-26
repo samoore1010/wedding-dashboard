@@ -5,6 +5,7 @@
 // for undo. Tool inputs are validated by the model against `input_schema`.
 
 import { useStore } from '../store';
+import { mergeContacts, toContacts } from '../guests/contacts';
 import type {
   GuestSide,
   GuestGroup,
@@ -40,6 +41,11 @@ function created<T extends { id: string }>(before: T[], after: T[]): T | undefin
 const str = (d?: string) => ({ type: 'string', ...(d ? { description: d } : {}) });
 const num = (d?: string) => ({ type: 'number', ...(d ? { description: d } : {}) });
 const bool = (d?: string) => ({ type: 'boolean', ...(d ? { description: d } : {}) });
+const strArr = (d?: string) => ({
+  type: 'array',
+  items: { type: 'string' },
+  ...(d ? { description: d } : {}),
+});
 const enumStr = (values: readonly string[], d?: string) => ({
   type: 'string',
   enum: values,
@@ -82,8 +88,8 @@ const memberSchema = obj(
     rsvp: enumStr(RSVPS, 'RSVP status (default Waiting)'),
     meal: enumStr(MEALS, 'Meal choice, if known'),
     dietary: str('Dietary notes / allergies'),
-    email: str("This person's own email address"),
-    phone: str("This person's own phone number"),
+    emails: strArr("This person's own email addresses — as many as are known"),
+    phones: strArr("This person's own phone numbers — as many as are known"),
   },
   ['name']
 );
@@ -136,8 +142,8 @@ export const TOOLS: AssistantTool[] = [
           ['Invited', 'B-list'],
           'Invited (firm) or B-list (backup — invite if space frees up). Default Invited.'
         ),
-        email: str('Contact email for the invitation'),
-        phone: str('Contact phone number for the invitation'),
+        emails: strArr('Contact emails for the invitation'),
+        phones: strArr('Contact phone numbers for the invitation'),
         address: str('Mailing address'),
         inviteSent: bool('Whether the invitation has been sent'),
         notes: str('Notes'),
@@ -157,16 +163,16 @@ export const TOOLS: AssistantTool[] = [
         rsvp: (m.rsvp as GuestStatus) || 'Waiting',
         meal: m.meal || '',
         dietary: m.dietary || '',
-        email: m.email || '',
-        phone: m.phone || '',
+        emails: toContacts(m.emails),
+        phones: toContacts(m.phones),
       }));
       S().addHousehold({
         label: i.label || '',
         side: (i.side as GuestSide) || 'Both',
         group: (i.group as GuestGroup) || 'Couple Friends',
         list: (i.list as any) || 'Invited',
-        email: i.email || '',
-        phone: i.phone || '',
+        emails: toContacts(i.emails),
+        phones: toContacts(i.phones),
         address: i.address || '',
         inviteSent: !!i.inviteSent,
         notes: i.notes || '',
@@ -186,8 +192,8 @@ export const TOOLS: AssistantTool[] = [
         side: enumStr(SIDES),
         group: enumStr(GROUPS),
         list: enumStr(['Invited', 'B-list'], 'Move to Invited / B-list'),
-        email: str(),
-        phone: str(),
+        emails: strArr('Replaces the household\'s email list — use set_contacts to add to it'),
+        phones: strArr('Replaces the household\'s phone list — use set_contacts to add to it'),
         address: str(),
         inviteSent: bool(),
         notes: str(),
@@ -200,8 +206,8 @@ export const TOOLS: AssistantTool[] = [
         : `Update household ${label('households', i.id)}`,
     run: (i) => {
       requireEntity('households', i.id);
-      const { id, ...patch } = i;
-      S().updateHousehold(id, clean(patch));
+      const { id, emails, phones, ...patch } = i;
+      S().updateHousehold(id, clean({ ...patch, ...contactPatch(emails, phones) }));
       return `Updated household "${label('households', id)}".`;
     },
   },
@@ -230,8 +236,8 @@ export const TOOLS: AssistantTool[] = [
         rsvp: enumStr(RSVPS),
         meal: enumStr(MEALS),
         dietary: str(),
-        email: str("This person's own email address"),
-        phone: str("This person's own phone number"),
+        emails: strArr("This person's own email addresses"),
+        phones: strArr("This person's own phone numbers"),
       },
       ['householdId', 'name']
     ),
@@ -244,8 +250,8 @@ export const TOOLS: AssistantTool[] = [
         rsvp: (i.rsvp as GuestStatus) || 'Waiting',
         meal: i.meal || '',
         dietary: i.dietary || '',
-        email: i.email || '',
-        phone: i.phone || '',
+        emails: toContacts(i.emails),
+        phones: toContacts(i.phones),
       });
       return `Added ${i.name} to "${label('households', i.householdId)}".`;
     },
@@ -264,16 +270,16 @@ export const TOOLS: AssistantTool[] = [
         rsvp: enumStr(RSVPS),
         meal: enumStr(MEALS),
         dietary: str(),
-        email: str("This person's own email address"),
-        phone: str("This person's own phone number"),
+        emails: strArr("Replaces this person's email list — use set_contacts to add to it"),
+        phones: strArr("Replaces this person's phone list — use set_contacts to add to it"),
       },
       ['householdId', 'memberId']
     ),
     summarize: (i) => `Update ${memberLabel(i.householdId, i.memberId)}`,
     run: (i) => {
-      const { householdId, memberId, ...patch } = i;
+      const { householdId, memberId, emails, phones, ...patch } = i;
       requireMember(householdId, memberId);
-      S().updateMember(householdId, memberId, clean(patch));
+      S().updateMember(householdId, memberId, clean({ ...patch, ...contactPatch(emails, phones) }));
       return `Updated ${memberLabel(householdId, memberId)}.`;
     },
   },
@@ -288,6 +294,100 @@ export const TOOLS: AssistantTool[] = [
       requireMember(i.householdId, i.memberId);
       S().removeMember(i.householdId, i.memberId);
       return `Removed ${name}.`;
+    },
+  },
+  {
+    name: 'set_contacts',
+    kind: 'write',
+    description:
+      'Fill in emails and phone numbers for many people and households in one step — use this when the couple ' +
+      'uploads a spreadsheet of contact details rather than calling update_member once per person. ' +
+      'Give a memberId to set that person\'s own contacts, or omit it to set the household\'s contacts. ' +
+      'People and households can each hold any number of emails and numbers. ' +
+      'Values are ADDED to whatever is already there (repeats are ignored); pass mode "replace" to overwrite instead. ' +
+      'Get the ids from get_dashboard section "guests" first, and match spreadsheet rows to people by name.',
+    input_schema: obj(
+      {
+        mode: enumStr(
+          ['add', 'replace'],
+          'add (default) keeps existing values and appends new ones; replace overwrites the list'
+        ),
+        entries: {
+          type: 'array',
+          description: 'One entry per person or household',
+          items: obj(
+            {
+              householdId: str('Household id (from get_dashboard)'),
+              memberId: str("Member id — omit to set the household's own contact details"),
+              emails: strArr('Email addresses for this person / household'),
+              phones: strArr('Phone numbers for this person / household'),
+            },
+            ['householdId']
+          ),
+        },
+      },
+      ['entries']
+    ),
+    summarize: (i) => {
+      const entries: any[] = Array.isArray(i.entries) ? i.entries : [];
+      const emails = entries.reduce((n, e) => n + toContacts(e.emails).length, 0);
+      const phones = entries.reduce((n, e) => n + toContacts(e.phones).length, 0);
+      const bits = [
+        emails ? `${emails} ${emails === 1 ? 'email' : 'emails'}` : '',
+        phones ? `${phones} ${phones === 1 ? 'number' : 'numbers'}` : '',
+      ].filter(Boolean);
+      const verb = i.mode === 'replace' ? 'Replace contacts on' : 'Add';
+      return `${verb} ${bits.join(' and ') || 'contacts'}${
+        i.mode === 'replace' ? '' : ' to'
+      } ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`;
+    },
+    run: (i) => {
+      const entries: any[] = Array.isArray(i.entries) ? i.entries : [];
+      if (!entries.length) throw new Error('No entries given.');
+      const replace = i.mode === 'replace';
+      let people = 0;
+      let houses = 0;
+
+      for (const e of entries) {
+        const emails = e.emails === undefined ? undefined : toContacts(e.emails);
+        const phones = e.phones === undefined ? undefined : toContacts(e.phones);
+        if (!emails?.length && !phones?.length && !replace) continue;
+
+        if (e.memberId) {
+          requireMember(e.householdId, e.memberId);
+          const m = S()
+            .households.find((h) => h.id === e.householdId)!
+            .members.find((x) => x.id === e.memberId)!;
+          S().updateMember(
+            e.householdId,
+            e.memberId,
+            clean({
+              emails: emails && (replace ? emails : mergeContacts(m.emails, emails)),
+              phones: phones && (replace ? phones : mergeContacts(m.phones, phones)),
+            })
+          );
+          people++;
+        } else {
+          requireEntity('households', e.householdId);
+          const h = S().households.find((x) => x.id === e.householdId)!;
+          S().updateHousehold(
+            e.householdId,
+            clean({
+              emails: emails && (replace ? emails : mergeContacts(h.emails, emails)),
+              phones: phones && (replace ? phones : mergeContacts(h.phones, phones)),
+            })
+          );
+          houses++;
+        }
+      }
+
+      const parts = [
+        people ? `${people} ${people === 1 ? 'person' : 'people'}` : '',
+        houses ? `${houses} ${houses === 1 ? 'household' : 'households'}` : '',
+      ].filter(Boolean);
+      return parts.length
+        ? `Updated contacts for ${parts.join(' and ')}.`
+        : 'Nothing to update — no emails or numbers were given.';
     },
   },
   {
@@ -1042,6 +1142,14 @@ export function anthropicToolDefs() {
 
 // ---- helpers ------------------------------------------------------------
 
+/** Normalise contact lists for a patch, leaving unmentioned ones untouched. */
+function contactPatch(emails: unknown, phones: unknown) {
+  return {
+    emails: emails === undefined ? undefined : toContacts(emails),
+    phones: phones === undefined ? undefined : toContacts(phones),
+  };
+}
+
 /** Drop undefined/null keys so patches don't overwrite fields with blanks. */
 function clean<T extends Record<string, any>>(o: T): Partial<T> {
   const out: any = {};
@@ -1137,8 +1245,8 @@ function readSection(section: string): unknown {
           side: h.side,
           group: h.group,
           list: h.list ?? 'Invited',
-          email: h.email,
-          phone: h.phone,
+          emails: h.emails,
+          phones: h.phones,
           inviteSent: h.inviteSent,
           table: h.table,
           notes: h.notes,
@@ -1149,8 +1257,8 @@ function readSection(section: string): unknown {
             rsvp: m.rsvp,
             meal: m.meal,
             dietary: m.dietary,
-            email: m.email,
-            phone: m.phone,
+            emails: m.emails,
+            phones: m.phones,
           })),
         })),
       };

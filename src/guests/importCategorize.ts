@@ -1,5 +1,6 @@
 import type { GuestGroup, GuestList, GuestSide, GuestStatus, Household, MemberKind } from '../types';
 import { GUEST_FIELDS, type GuestFieldKey } from './schema';
+import { cleanContacts, splitContacts } from './contacts';
 import type { Sheet } from './importParse';
 import { uid } from '../utils';
 
@@ -12,8 +13,8 @@ export interface StagedMember {
   rsvp: GuestStatus;
   meal: string;
   dietary: string;
-  email: string;
-  phone: string;
+  emails: string[];
+  phones: string[];
 }
 
 export type RowStatus = 'new' | 'duplicate' | 'update';
@@ -25,8 +26,8 @@ export interface StagedHousehold {
   side: GuestSide;
   group: GuestGroup;
   list: GuestList;
-  email: string;
-  phone: string;
+  emails: string[];
+  phones: string[];
   address: string;
   inviteSent: boolean;
   notes: string;
@@ -163,14 +164,14 @@ interface RawGuest {
   rsvp: string;
   meal: string;
   dietary: string;
-  guestEmail: string;
-  guestPhone: string;
+  guestEmails: string[];
+  guestPhones: string[];
   side: string;
   group: string;
   list: string;
   inviteSent: string;
-  email: string;
-  phone: string;
+  emails: string[];
+  phones: string[];
   address: string;
   table: string;
   notes: string;
@@ -181,8 +182,50 @@ const getCell = (row: string[], map: ColumnMap, key: GuestFieldKey): string => {
   return idx == null ? '' : (row[idx] ?? '').trim();
 };
 
-const rawFromSheet = (sheet: Sheet, map: ColumnMap): RawGuest[] =>
-  sheet.rows
+const CONTACT_KEYS = ['email', 'phone', 'guestEmail', 'guestPhone'] as const;
+type ContactKey = (typeof CONTACT_KEYS)[number];
+
+const OVERFLOW_PREFIX =
+  /^(alt|alternate|alternative|second|secondary|third|other|another|extra|2nd|3rd)\s+/;
+
+/**
+ * Columns holding *more of the same* contact — "Phone 2", "Alt Email",
+ * "Guest Phone 3". Only one column per field can be mapped, so without this
+ * pass the extras would be silently dropped instead of merged into the list.
+ */
+const overflowColumns = (headers: string[], map: ColumnMap): Record<ContactKey, number[]> => {
+  const out: Record<ContactKey, number[]> = { email: [], phone: [], guestEmail: [], guestPhone: [] };
+  const used = new Set<number>(Object.values(map).filter((i): i is number => i != null));
+  const normHeaders = headers.map(norm);
+  for (const key of CONTACT_KEYS) {
+    const field = GUEST_FIELDS.find((f) => f.key === key);
+    if (!field) continue;
+    const targets = [norm(field.header), ...field.aliases.map(norm)];
+    normHeaders.forEach((h, i) => {
+      if (!h || used.has(i)) return;
+      const base = h.replace(/\s*\d+$/, '').replace(OVERFLOW_PREFIX, '').trim();
+      if (targets.includes(base)) {
+        out[key].push(i);
+        used.add(i);
+      }
+    });
+  }
+  return out;
+};
+
+/** How many extra contact columns will be merged in, for the review summary. */
+export const countOverflowColumns = (headers: string[], map: ColumnMap): number =>
+  Object.values(overflowColumns(headers, map)).reduce((n, idxs) => n + idxs.length, 0);
+
+const rawFromSheet = (sheet: Sheet, map: ColumnMap): RawGuest[] => {
+  const extra = overflowColumns(sheet.headers, map);
+  // One cell can hold several values ("555-0100 / 555-0101"), and the same
+  // contact can span several columns — collect both into one clean list.
+  const contacts = (row: string[], key: ContactKey): string[] => {
+    const idxs = [map[key], ...extra[key]].filter((i): i is number => i != null);
+    return cleanContacts(idxs.flatMap((i) => splitContacts(row[i] ?? '')));
+  };
+  return sheet.rows
     .map((row) => ({
       household: getCell(row, map, 'household'),
       name: getCell(row, map, 'name'),
@@ -190,19 +233,20 @@ const rawFromSheet = (sheet: Sheet, map: ColumnMap): RawGuest[] =>
       rsvp: getCell(row, map, 'rsvp'),
       meal: getCell(row, map, 'meal'),
       dietary: getCell(row, map, 'dietary'),
-      guestEmail: getCell(row, map, 'guestEmail'),
-      guestPhone: getCell(row, map, 'guestPhone'),
+      guestEmails: contacts(row, 'guestEmail'),
+      guestPhones: contacts(row, 'guestPhone'),
       side: getCell(row, map, 'side'),
       group: getCell(row, map, 'group'),
       list: getCell(row, map, 'list'),
       inviteSent: getCell(row, map, 'inviteSent'),
-      email: getCell(row, map, 'email'),
-      phone: getCell(row, map, 'phone'),
+      emails: contacts(row, 'email'),
+      phones: contacts(row, 'phone'),
       address: getCell(row, map, 'address'),
       table: getCell(row, map, 'table'),
       notes: getCell(row, map, 'notes'),
     }))
     .filter((r) => r.name || r.household);
+};
 
 /** Split "John & Jane Smith" / "John and Jane Doe" into individual names. */
 const splitNames = (name: string): string[] => {
@@ -232,7 +276,7 @@ export const groupIntoHouseholds = (raws: RawGuest[]): StagedHousehold[] => {
   let solo = 0;
   for (const r of raws) {
     let key: string;
-    const anyEmail = r.email || r.guestEmail;
+    const anyEmail = r.emails[0] || r.guestEmails[0];
     if (r.household) key = 'hh:' + norm(r.household);
     else if (anyEmail) key = 'em:' + norm(anyEmail);
     else if (r.address) key = 'ad:' + norm(r.address) + '|' + surnameOf(r.name);
@@ -244,8 +288,8 @@ export const groupIntoHouseholds = (raws: RawGuest[]): StagedHousehold[] => {
   for (const group of buckets.values()) {
     const members: StagedMember[] = [];
     for (const r of group) {
-      // One row can carry two names ("John & Jane Smith") but only ever one
-      // email/phone — they belong to the first person named, not to both.
+      // One row can carry two names ("John & Jane Smith"); its contact details
+      // belong to the first person named, not to both.
       splitNames(r.name || r.household).forEach((nm, i) => {
         members.push({
           name: nm,
@@ -253,16 +297,19 @@ export const groupIntoHouseholds = (raws: RawGuest[]): StagedHousehold[] => {
           rsvp: normRsvp(r.rsvp),
           meal: r.meal,
           dietary: r.dietary,
-          email: i === 0 ? r.guestEmail : '',
-          phone: i === 0 ? r.guestPhone : '',
+          emails: i === 0 ? r.guestEmails : [],
+          phones: i === 0 ? r.guestPhones : [],
         });
       });
     }
     if (!members.length) continue;
 
-    // Household-level fields come from the first row that supplies each.
+    // Household-level fields come from the first row that supplies each…
     const first = group[0];
-    const pick = (k: keyof RawGuest) => group.map((g) => g[k]).find((v) => v && v.trim()) ?? '';
+    const pick = (k: keyof RawGuest) =>
+      (group.map((g) => g[k]).find((v) => typeof v === 'string' && v.trim()) as string) ?? '';
+    // …except contacts, where every row's values are kept.
+    const gather = (k: 'emails' | 'phones') => cleanContacts(group.flatMap((g) => g[k]));
     const { side, guessed: sideGuessed } = normSide(pick('side'));
     const { group: grp, guessed: groupGuessed } = normGroup(pick('group'), side);
     const flags: string[] = [];
@@ -275,8 +322,8 @@ export const groupIntoHouseholds = (raws: RawGuest[]): StagedHousehold[] => {
       side,
       group: grp,
       list: normList(pick('list')),
-      email: pick('email'),
-      phone: pick('phone'),
+      emails: gather('emails'),
+      phones: gather('phones'),
       address: pick('address'),
       inviteSent: normBool(pick('inviteSent')),
       notes: pick('notes'),
@@ -319,16 +366,16 @@ export const markDuplicates = (staged: StagedHousehold[], existing: Household[])
   const byName = new Map<string, string>();
   const byEmail = new Map<string, string>();
   for (const h of existing) {
-    if (h.email) byEmail.set(norm(h.email), h.id);
+    for (const e of h.emails) byEmail.set(norm(e), h.id);
     for (const m of h.members) {
-      if (m.email) byEmail.set(norm(m.email), h.id);
+      for (const e of m.emails) byEmail.set(norm(e), h.id);
       const k = nameKey(m.name);
       if (k) byName.set(k, h.id);
     }
   }
   for (const s of staged) {
     let match: string | undefined;
-    for (const e of [s.email, ...s.members.map((m) => m.email)]) {
+    for (const e of [...s.emails, ...s.members.flatMap((m) => m.emails)]) {
       if (!e) continue;
       match = byEmail.get(norm(e));
       if (match) break;

@@ -7,6 +7,7 @@ import {
   markDuplicates,
 } from './importCategorize';
 import { GROUPS, LISTS, SIDES } from './schema';
+import { cleanContacts, splitContacts } from './contacts';
 import { uid } from '../utils';
 
 interface AiGuest {
@@ -83,6 +84,9 @@ export const aiStageImport = async (
     const row = sheet.rows[rowIdx];
     return col == null || !row ? '' : (row[col] ?? '').trim();
   };
+  /** Same, for cells that may hold several contacts ("555-0100 / 555-0101"). */
+  const contactCell = (rowIdx: number, key: keyof ColumnMap): string[] =>
+    splitContacts(cell(rowIdx, key));
 
   const byHousehold = new Map<string, AiGuest[]>();
   for (const g of guests) {
@@ -102,8 +106,8 @@ export const aiStageImport = async (
       rsvp: oneOf<GuestStatus>(g.rsvp, ['Yes', 'No', 'Waiting'], 'Waiting'),
       meal: cell(g.index, 'meal'),
       dietary: cell(g.index, 'dietary'),
-      email: cell(g.index, 'guestEmail'),
-      phone: cell(g.index, 'guestPhone'),
+      emails: contactCell(g.index, 'guestEmail'),
+      phones: contactCell(g.index, 'guestPhone'),
     }));
 
     const side = oneOf<GuestSide>(group[0].side, SIDES, 'Both');
@@ -116,8 +120,8 @@ export const aiStageImport = async (
       side,
       group: grp,
       list,
-      email: firstWith('email'),
-      phone: firstWith('phone'),
+      emails: cleanContacts(rowIdxs.flatMap((i) => contactCell(i, 'email'))),
+      phones: cleanContacts(rowIdxs.flatMap((i) => contactCell(i, 'phone'))),
       address: firstWith('address'),
       inviteSent: /^(y|yes|true|sent|1)$/i.test(firstWith('inviteSent')),
       notes: firstWith('notes'),
