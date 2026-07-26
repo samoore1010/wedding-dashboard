@@ -11,6 +11,7 @@ import {
   ChevronDown,
   FileText,
   FileSpreadsheet,
+  Phone,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useShallowStore } from '../store';
@@ -619,17 +620,32 @@ function HouseholdCard({
           {h.members.map((m) => (
             <span
               key={m.id}
-              className="inline-flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-full bg-bg border border-border text-xs"
+              className="inline-flex items-start gap-1.5 pl-2 pr-2.5 py-1 rounded-xl2 bg-bg border border-border text-xs"
             >
-              <span className={cn('w-1.5 h-1.5 rounded-full', rsvpDot[m.rsvp])} />
-              <span className="font-medium text-ink">{m.name || 'Unnamed'}</span>
-              {m.kind === 'child' && (
-                <span className="text-[9px] font-bold uppercase text-accent bg-accent/15 px-1 rounded">kid</span>
-              )}
-              {m.meal && <span className="text-muted">· {m.meal}</span>}
+              <span className={cn('w-1.5 h-1.5 rounded-full mt-[7px] shrink-0', rsvpDot[m.rsvp])} />
+              <span className="flex flex-col gap-0.5 leading-tight py-0.5">
+                <span className="inline-flex items-center gap-1.5 flex-wrap">
+                  <span className="font-medium text-ink">{m.name || 'Unnamed'}</span>
+                  {m.kind === 'child' && (
+                    <span className="text-[9px] font-bold uppercase text-accent bg-accent/15 px-1 rounded">kid</span>
+                  )}
+                  {m.meal && <span className="text-muted">· {m.meal}</span>}
+                </span>
+                {m.phones.length > 0 && (
+                  <span className="text-[10px] text-muted tabular-nums">{m.phones.join(' · ')}</span>
+                )}
+              </span>
             </span>
           ))}
         </div>
+        {/* Numbers kept on the invitation rather than on one person. */}
+        {h.phones.length > 0 && (
+          <div className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-muted">
+            <Phone size={10} className="shrink-0" />
+            <span className="tabular-nums">{h.phones.join(' · ')}</span>
+            <span className="text-muted/70">· household</span>
+          </div>
+        )}
       </div>
       <div className="flex flex-col items-end justify-center gap-1 text-right shrink-0">
         {notInvited ? (
