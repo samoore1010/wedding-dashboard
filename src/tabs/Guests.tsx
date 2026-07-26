@@ -119,7 +119,16 @@ export function Guests() {
       if (side !== 'All' && h.side !== side && h.side !== 'Both') return false;
       if (rsvp !== 'All' && !h.members.some((m) => m.rsvp === rsvp)) return false;
       if (q) {
-        const hay = [h.label, h.group, h.notes, ...h.members.map((m) => m.name)].join(' ').toLowerCase();
+        const hay = [
+          h.label,
+          h.group,
+          h.notes,
+          h.email,
+          h.phone,
+          ...h.members.flatMap((m) => [m.name, m.email, m.phone]),
+        ]
+          .join(' ')
+          .toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -189,7 +198,7 @@ export function Guests() {
           <div className="relative flex-1 min-w-[200px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <Input
-              placeholder="Search people, households, notes…"
+              placeholder="Search people, emails, households, notes…"
               className="pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -754,7 +763,7 @@ function EditDrawer({
                         ))}
                       </Select>
                     </Labeled>
-                    <Labeled label="Contact email">
+                    <Labeled label="Household email">
                       <Input
                         type="email"
                         value={h.email}
@@ -762,16 +771,24 @@ function EditDrawer({
                         placeholder="name@email.com"
                       />
                     </Labeled>
-                    <Labeled label="Invitation">
-                      <Select
-                        value={h.inviteSent ? 'Sent' : 'Not sent'}
-                        onChange={(e) => onUpdateHousehold({ inviteSent: e.target.value === 'Sent' })}
-                      >
-                        <option>Not sent</option>
-                        <option>Sent</option>
-                      </Select>
+                    <Labeled label="Household phone">
+                      <Input
+                        type="tel"
+                        value={h.phone}
+                        onChange={(e) => onUpdateHousehold({ phone: e.target.value })}
+                        placeholder="(555) 123-4567"
+                      />
                     </Labeled>
                   </div>
+                  <Labeled label="Invitation">
+                    <Select
+                      value={h.inviteSent ? 'Sent' : 'Not sent'}
+                      onChange={(e) => onUpdateHousehold({ inviteSent: e.target.value === 'Sent' })}
+                    >
+                      <option>Not sent</option>
+                      <option>Sent</option>
+                    </Select>
+                  </Labeled>
                   <Labeled label="Notes">
                     <Input
                       value={h.notes}
@@ -860,6 +877,22 @@ function MemberRow({
           value={m.dietary}
           onChange={(e) => onChange({ dietary: e.target.value })}
           placeholder="Dietary notes"
+          className="text-xs h-8 py-0"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Input
+          type="email"
+          value={m.email}
+          onChange={(e) => onChange({ email: e.target.value })}
+          placeholder="Email"
+          className="text-xs h-8 py-0"
+        />
+        <Input
+          type="tel"
+          value={m.phone}
+          onChange={(e) => onChange({ phone: e.target.value })}
+          placeholder="Phone"
           className="text-xs h-8 py-0"
         />
       </div>

@@ -102,6 +102,8 @@ export const aiStageImport = async (
       rsvp: oneOf<GuestStatus>(g.rsvp, ['Yes', 'No', 'Waiting'], 'Waiting'),
       meal: cell(g.index, 'meal'),
       dietary: cell(g.index, 'dietary'),
+      email: cell(g.index, 'guestEmail'),
+      phone: cell(g.index, 'guestPhone'),
     }));
 
     const side = oneOf<GuestSide>(group[0].side, SIDES, 'Both');
@@ -115,6 +117,7 @@ export const aiStageImport = async (
       group: grp,
       list,
       email: firstWith('email'),
+      phone: firstWith('phone'),
       address: firstWith('address'),
       inviteSent: /^(y|yes|true|sent|1)$/i.test(firstWith('inviteSent')),
       notes: firstWith('notes'),

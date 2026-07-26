@@ -37,6 +37,8 @@ const makeMember = (patch?: Partial<Member>): Member => ({
   rsvp: 'Waiting',
   meal: '',
   dietary: '',
+  email: '',
+  phone: '',
   ...patch,
 });
 
@@ -281,6 +283,7 @@ export const useStore = create<AppState & Actions & UndoState>()(
               side: 'Both',
               list: 'Invited',
               email: '',
+              phone: '',
               address: '',
               inviteSent: false,
               notes: '',
@@ -351,6 +354,7 @@ export const useStore = create<AppState & Actions & UndoState>()(
           side: 'Both',
           list: 'Invited',
           email: '',
+          phone: '',
           address: '',
           inviteSent: false,
           notes: '',
@@ -874,7 +878,7 @@ export const useStore = create<AppState & Actions & UndoState>()(
     }),
     {
       name: 'wedding-dashboard-v1',
-      version: 7,
+      version: 9,
       // Undo history is session-only — never sync it to the server/localStorage.
       partialize: (s) => {
         const { undoStack: _u, ...rest } = s as any;
@@ -962,6 +966,21 @@ export const useStore = create<AppState & Actions & UndoState>()(
           persisted.households = (persisted.households ?? []).map((h: any) => ({
             ...h,
             list: h.list === 'Maybe' ? 'B-list' : h.list ?? 'Invited',
+          }));
+        }
+        // v8: people gained their own email alongside the household contact one.
+        if (version < 8) {
+          persisted.households = (persisted.households ?? []).map((h: any) => ({
+            ...h,
+            members: (h.members ?? []).map((m: any) => ({ ...m, email: m.email ?? '' })),
+          }));
+        }
+        // v9: phone numbers, at both levels — same shape as email.
+        if (version < 9) {
+          persisted.households = (persisted.households ?? []).map((h: any) => ({
+            ...h,
+            phone: h.phone ?? '',
+            members: (h.members ?? []).map((m: any) => ({ ...m, phone: m.phone ?? '' })),
           }));
         }
         return persisted;

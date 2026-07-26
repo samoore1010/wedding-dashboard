@@ -7,7 +7,8 @@ import type { GuestGroup, GuestList, GuestSide, GuestStatus, MemberKind } from '
  *   2. the downloadable blank template,
  *   3. the set of fields the import wizard maps incoming columns onto.
  *
- * Each row in the table is ONE person. Household-level fields (side, list,
+ * Each row in the table is ONE person. Member-level fields (name, RSVP, meal,
+ * their own email, …) are that person's; household-level fields (side, list,
  * address, …) repeat on every member's row — that is the shape most couples
  * already keep their guest spreadsheet in, and it round-trips losslessly.
  */
@@ -18,11 +19,14 @@ export type GuestFieldKey =
   | 'rsvp'
   | 'meal'
   | 'dietary'
+  | 'guestEmail'
+  | 'guestPhone'
   | 'side'
   | 'group'
   | 'list'
   | 'inviteSent'
   | 'email'
+  | 'phone'
   | 'address'
   | 'table'
   | 'notes';
@@ -75,6 +79,18 @@ export const GUEST_FIELDS: GuestField[] = [
     aliases: ['dietary', 'dietary needs', 'allergies', 'restrictions', 'dietary restrictions', 'notes (food)'],
   },
   {
+    key: 'guestEmail',
+    header: 'Guest Email',
+    level: 'member',
+    aliases: ['guest email', 'personal email', 'their email', 'email (guest)', 'attendee email'],
+  },
+  {
+    key: 'guestPhone',
+    header: 'Guest Phone',
+    level: 'member',
+    aliases: ['guest phone', 'personal phone', 'their phone', 'phone (guest)', 'guest mobile', 'attendee phone'],
+  },
+  {
     key: 'side',
     header: 'Side',
     level: 'household',
@@ -103,6 +119,12 @@ export const GUEST_FIELDS: GuestField[] = [
     header: 'Email',
     level: 'household',
     aliases: ['email', 'e-mail', 'email address', 'contact email'],
+  },
+  {
+    key: 'phone',
+    header: 'Phone',
+    level: 'household',
+    aliases: ['phone', 'phone number', 'telephone', 'mobile', 'cell', 'cell phone', 'contact phone', 'tel'],
   },
   {
     key: 'address',

@@ -82,6 +82,8 @@ const memberSchema = obj(
     rsvp: enumStr(RSVPS, 'RSVP status (default Waiting)'),
     meal: enumStr(MEALS, 'Meal choice, if known'),
     dietary: str('Dietary notes / allergies'),
+    email: str("This person's own email address"),
+    phone: str("This person's own phone number"),
   },
   ['name']
 );
@@ -135,6 +137,7 @@ export const TOOLS: AssistantTool[] = [
           'Invited (firm) or B-list (backup — invite if space frees up). Default Invited.'
         ),
         email: str('Contact email for the invitation'),
+        phone: str('Contact phone number for the invitation'),
         address: str('Mailing address'),
         inviteSent: bool('Whether the invitation has been sent'),
         notes: str('Notes'),
@@ -154,6 +157,8 @@ export const TOOLS: AssistantTool[] = [
         rsvp: (m.rsvp as GuestStatus) || 'Waiting',
         meal: m.meal || '',
         dietary: m.dietary || '',
+        email: m.email || '',
+        phone: m.phone || '',
       }));
       S().addHousehold({
         label: i.label || '',
@@ -161,6 +166,7 @@ export const TOOLS: AssistantTool[] = [
         group: (i.group as GuestGroup) || 'Couple Friends',
         list: (i.list as any) || 'Invited',
         email: i.email || '',
+        phone: i.phone || '',
         address: i.address || '',
         inviteSent: !!i.inviteSent,
         notes: i.notes || '',
@@ -181,6 +187,7 @@ export const TOOLS: AssistantTool[] = [
         group: enumStr(GROUPS),
         list: enumStr(['Invited', 'B-list'], 'Move to Invited / B-list'),
         email: str(),
+        phone: str(),
         address: str(),
         inviteSent: bool(),
         notes: str(),
@@ -223,6 +230,8 @@ export const TOOLS: AssistantTool[] = [
         rsvp: enumStr(RSVPS),
         meal: enumStr(MEALS),
         dietary: str(),
+        email: str("This person's own email address"),
+        phone: str("This person's own phone number"),
       },
       ['householdId', 'name']
     ),
@@ -235,6 +244,8 @@ export const TOOLS: AssistantTool[] = [
         rsvp: (i.rsvp as GuestStatus) || 'Waiting',
         meal: i.meal || '',
         dietary: i.dietary || '',
+        email: i.email || '',
+        phone: i.phone || '',
       });
       return `Added ${i.name} to "${label('households', i.householdId)}".`;
     },
@@ -242,7 +253,8 @@ export const TOOLS: AssistantTool[] = [
   {
     name: 'update_member',
     kind: 'write',
-    description: 'Update one person: their name, adult/child, RSVP, meal, or dietary notes.',
+    description:
+      'Update one person: their name, adult/child, RSVP, meal, dietary notes, email, or phone.',
     input_schema: obj(
       {
         householdId: str('Household id'),
@@ -252,6 +264,8 @@ export const TOOLS: AssistantTool[] = [
         rsvp: enumStr(RSVPS),
         meal: enumStr(MEALS),
         dietary: str(),
+        email: str("This person's own email address"),
+        phone: str("This person's own phone number"),
       },
       ['householdId', 'memberId']
     ),
@@ -1124,6 +1138,7 @@ function readSection(section: string): unknown {
           group: h.group,
           list: h.list ?? 'Invited',
           email: h.email,
+          phone: h.phone,
           inviteSent: h.inviteSent,
           table: h.table,
           notes: h.notes,
@@ -1134,6 +1149,8 @@ function readSection(section: string): unknown {
             rsvp: m.rsvp,
             meal: m.meal,
             dietary: m.dietary,
+            email: m.email,
+            phone: m.phone,
           })),
         })),
       };

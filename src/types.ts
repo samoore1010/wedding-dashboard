@@ -16,7 +16,7 @@ export type GuestGroup =
 export type MemberKind = 'adult' | 'child';
 
 /**
- * A single person. RSVP, meal, and dietary needs are tracked per person,
+ * A single person. RSVP, meal, dietary needs, and email are tracked per person,
  * because at a real wedding those answers differ within one household.
  */
 export interface Member {
@@ -26,6 +26,10 @@ export interface Member {
   rsvp: GuestStatus;
   meal: string;
   dietary: string;
+  /** This person's own email. The household keeps a separate contact email. */
+  email: string;
+  /** This person's own phone. The household keeps a separate contact phone. */
+  phone: string;
 }
 
 /**
@@ -42,6 +46,7 @@ export interface Household {
   /** Firm invite, backup (invite if space frees up), or undecided. */
   list: GuestList;
   email: string;
+  phone: string;
   address: string;
   inviteSent: boolean;
   notes: string;
