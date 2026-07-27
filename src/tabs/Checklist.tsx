@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { Plus, Trash2, ChevronDown, FolderPlus } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, FolderPlus, StickyNote, Link2, CalendarDays } from 'lucide-react';
 import { useShallowStore } from '../store';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Field';
 import { Modal } from '../components/ui/Modal';
-import { EditableText } from '../components/ui/EditableText';
 import { ProgressBar } from '../components/ui/ProgressBar';
 import { IconButton } from '../components/ui/IconButton';
 import { confirmAction } from '../components/ui/ConfirmDialog';
 import { cn, pct } from '../utils';
+import { ItemDetail } from './checklist/ItemDetail';
+import type { ChecklistItem } from '../types';
 
 export function Checklist() {
   const {
@@ -37,6 +38,29 @@ export function Checklist() {
   );
   const [phaseDialog, setPhaseDialog] = useState(false);
   const [phaseName, setPhaseName] = useState('');
+  /** Which task has its own page open, if any. */
+  const [openItem, setOpenItem] = useState<{ phase: string; id: string } | null>(null);
+
+  const detail = openItem
+    ? (checklistItems[openItem.phase] ?? []).find((it) => it.id === openItem.id)
+    : undefined;
+
+  if (openItem && detail) {
+    return (
+      <ItemDetail
+        phase={openItem.phase}
+        item={detail}
+        done={!!checklist[detail.id]}
+        onBack={() => setOpenItem(null)}
+        onToggle={(v) => toggleCheck(detail.id, v)}
+        onSave={(patch) => updateCheckItem(openItem.phase, detail.id, patch)}
+        onDelete={() => {
+          removeCheckItem(openItem.phase, detail.id);
+          setOpenItem(null);
+        }}
+      />
+    );
+  }
 
   let total = 0;
   let done = 0;
@@ -126,16 +150,21 @@ export function Checklist() {
                           onChange={(e) => toggleCheck(it.id, e.target.checked)}
                           className="h-4 w-4 accent-sage cursor-pointer flex-shrink-0"
                         />
-                        <div
-                          className={cn('flex-1', checked && 'line-through text-muted')}
+                        <button
+                          onClick={() => setOpenItem({ phase, id: it.id })}
+                          className="flex-1 min-w-0 text-left group/task"
                         >
-                          <EditableText
-                            value={it.text}
-                            onChange={(v) => updateCheckItem(phase, it.id, v)}
-                            placeholder="Task"
-                            className="text-sm"
-                          />
-                        </div>
+                          <span
+                            className={cn(
+                              'text-sm text-ink group-hover/task:text-accent transition-colors',
+                              checked && 'line-through text-muted',
+                              !it.text && 'text-muted/70'
+                            )}
+                          >
+                            {it.text || 'Untitled task'}
+                          </span>
+                          <ItemMarkers item={it} />
+                        </button>
                         <IconButton
                           tone="danger"
                           onClick={() => removeCheckItem(phase, it.id)}
@@ -205,6 +234,28 @@ export function Checklist() {
         />
       </Modal>
     </div>
+  );
+}
+
+/** Small hints that a task has detail worth opening. */
+function ItemMarkers({ item }: { item: ChecklistItem }) {
+  const links = item.links?.length ?? 0;
+  const hasNotes = !!item.notes?.trim();
+  if (!hasNotes && !links && !item.due) return null;
+  return (
+    <span className="ml-2 inline-flex items-center gap-2 align-middle text-[10px] text-muted">
+      {item.due && (
+        <span className="inline-flex items-center gap-0.5">
+          <CalendarDays size={10} /> {item.due}
+        </span>
+      )}
+      {hasNotes && <StickyNote size={10} aria-label="Has notes" />}
+      {links > 0 && (
+        <span className="inline-flex items-center gap-0.5">
+          <Link2 size={10} /> {links}
+        </span>
+      )}
+    </span>
   );
 }
 

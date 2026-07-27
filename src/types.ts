@@ -86,9 +86,21 @@ export interface Vendor {
   notes: string;
 }
 
+export interface ChecklistLink {
+  id: string;
+  /** What to call the link; falls back to the URL when blank. */
+  label: string;
+  url: string;
+}
+
 export interface ChecklistItem {
   id: string;
   text: string;
+  /** Free-form detail for the task, edited on its own page. */
+  notes: string;
+  links: ChecklistLink[];
+  /** ISO yyyy-mm-dd, or '' for no date. */
+  due: string;
 }
 
 export interface SeatingTable {

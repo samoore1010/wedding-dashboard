@@ -326,7 +326,7 @@ export const DEFAULT_STATE: AppState = {
   checklistItems: Object.fromEntries(
     Object.entries(DEFAULT_CHECKLIST).map(([phase, items]) => [
       phase,
-      items.map((t, i) => ({ id: `${phase}_${i}`, text: t })),
+      items.map((t, i) => ({ id: `${phase}_${i}`, text: t, notes: '', links: [], due: '' })),
     ])
   ),
   vendors: DEFAULT_VENDORS,

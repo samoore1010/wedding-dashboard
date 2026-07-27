@@ -6,7 +6,9 @@
 
 import { useStore } from '../store';
 import { mergeContacts, toContacts } from '../guests/contacts';
+import { uid } from '../utils';
 import type {
+  ChecklistLink,
   GuestSide,
   GuestGroup,
   GuestStatus,
@@ -886,11 +888,56 @@ export const TOOLS: AssistantTool[] = [
     name: 'add_checklist_item',
     kind: 'write',
     description: 'Add a to-do item under a checklist phase. Create the phase first if it does not exist.',
-    input_schema: obj({ phase: str('Phase name'), text: str('Task text') }, ['phase', 'text']),
+    input_schema: obj(
+      {
+        phase: str('Phase name'),
+        text: str('Task text'),
+        notes: str('Longer detail for the task, shown on its own page'),
+        due: str('Due date as yyyy-mm-dd'),
+        links: {
+          type: 'array',
+          description: 'Reference links for the task',
+          items: obj({ label: str('What the link is'), url: str('https://…') }, ['url']),
+        },
+      },
+      ['phase', 'text']
+    ),
     summarize: (i) => `Add checklist task "${i.text}" under "${i.phase}"`,
     run: (i) => {
-      S().addCheckItem(i.phase, i.text);
+      const id = S().addCheckItem(i.phase, i.text);
+      S().updateCheckItem(i.phase, id, clean({ notes: i.notes, due: i.due, links: toLinks(i.links) }));
       return `Added task "${i.text}" to "${i.phase}".`;
+    },
+  },
+  {
+    name: 'update_checklist_item',
+    kind: 'write',
+    description:
+      "Update a checklist task: rename it, or fill in the detail on its page — notes, a due date, reference links. " +
+      'Links replace the existing list, so include any that should stay.',
+    input_schema: obj(
+      {
+        id: str('Checklist item id (from get_dashboard section "checklist")'),
+        text: str('New task name'),
+        notes: str('Notes shown on the task page'),
+        due: str('Due date as yyyy-mm-dd, or "" to clear'),
+        links: {
+          type: 'array',
+          description: 'Replaces the task\'s links',
+          items: obj({ label: str('What the link is'), url: str('https://…') }, ['url']),
+        },
+      },
+      ['id']
+    ),
+    summarize: (i) => `Update checklist task "${checkItemLabel(i.id)}"`,
+    run: (i) => {
+      const phase = phaseOf(i.id);
+      S().updateCheckItem(
+        phase,
+        i.id,
+        clean({ text: i.text, notes: i.notes, due: i.due, links: toLinks(i.links) })
+      );
+      return `Updated checklist task "${checkItemLabel(i.id)}".`;
     },
   },
   {
@@ -1157,6 +1204,32 @@ function clean<T extends Record<string, any>>(o: T): Partial<T> {
   return out;
 }
 
+/** Which phase holds a checklist item — the store keys tasks by phase. */
+function phaseOf(itemId: string): string {
+  const entries = Object.entries(S().checklistItems);
+  const hit = entries.find(([, items]) => items.some((it) => it.id === itemId));
+  if (!hit) {
+    throw new Error(`No checklist item with id "${itemId}". Call get_dashboard section "checklist".`);
+  }
+  return hit[0];
+}
+
+function checkItemLabel(itemId: string): string {
+  for (const items of Object.values(S().checklistItems)) {
+    const hit = items.find((it) => it.id === itemId);
+    if (hit) return hit.text;
+  }
+  return itemId;
+}
+
+/** Normalise assistant-supplied links, giving each one an id. */
+function toLinks(links: unknown): ChecklistLink[] | undefined {
+  if (!Array.isArray(links)) return undefined;
+  return links
+    .filter((l: any) => l && String(l.url ?? '').trim())
+    .map((l: any) => ({ id: 'l_' + uid(), label: String(l.label ?? ''), url: String(l.url).trim() }));
+}
+
 function requireEntity(key: 'households' | 'budgetCats' | 'vendors' | 'seating' | 'venues' | 'giftTracker' | 'honeymoonDays', id: string) {
   const list = (S() as any)[key] as Array<{ id: string }>;
   if (!list.some((x) => x.id === id)) {
@@ -1328,7 +1401,14 @@ function readSection(section: string): unknown {
       return {
         phases: Object.entries(s.checklistItems).map(([phase, items]) => ({
           phase,
-          items: items.map((it) => ({ id: it.id, text: it.text, done: !!s.checklist[it.id] })),
+          items: items.map((it) => ({
+            id: it.id,
+            text: it.text,
+            done: !!s.checklist[it.id],
+            notes: it.notes,
+            due: it.due,
+            links: it.links,
+          })),
         })),
       };
     case 'registry':
