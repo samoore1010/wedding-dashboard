@@ -2,7 +2,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { useShallowStore } from '../store';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Input, Textarea, LabeledField } from '../components/ui/Field';
+import { LabeledField } from '../components/ui/Field';
 import { EditableText } from '../components/ui/EditableText';
 import { IconButton } from '../components/ui/IconButton';
 import { confirmAction } from '../components/ui/ConfirmDialog';
@@ -43,25 +43,29 @@ export function Honeymoon() {
       <Card title="The Trip">
         <div className="grid md:grid-cols-2 gap-4">
           <LabeledField label="Destination">
-            <Input
+            <EditableText
               value={honeymoonDestination || ''}
-              onChange={(e) => setHoneymoonDestination(e.target.value)}
+              onChange={setHoneymoonDestination}
+              ariaLabel="destination"
               placeholder="Where are you headed?"
             />
           </LabeledField>
           <LabeledField label={`Budget (${settings.currency})`}>
-            <Input
-              type="number"
-              value={honeymoonBudget || 0}
-              onChange={(e) => setHoneymoonBudget(Number(e.target.value) || 0)}
+            <EditableText
+              value={String(honeymoonBudget || 0)}
+              numeric
+              ariaLabel="honeymoon budget"
+              onChange={(next) => setHoneymoonBudget(Number(next) || 0)}
             />
           </LabeledField>
         </div>
         <LabeledField label="Brainstorm" className="mt-4">
-          <Textarea
+          <EditableText
+            multiline
             rows={4}
             value={honeymoonNotes}
-            onChange={(e) => setHoneymoonNotes(e.target.value)}
+            onChange={setHoneymoonNotes}
+            ariaLabel="brainstorm notes"
             placeholder="Destinations to consider, must-dos, restaurants, hotels…"
           />
         </LabeledField>
@@ -119,10 +123,12 @@ export function Honeymoon() {
       </Card>
 
       <Card title="Packing List">
-        <Textarea
+        <EditableText
+          multiline
           rows={6}
           value={packingList}
-          onChange={(e) => setPackingList(e.target.value)}
+          onChange={setPackingList}
+          ariaLabel="packing list"
           placeholder="Start your packing list here…"
         />
       </Card>

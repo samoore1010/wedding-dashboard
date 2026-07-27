@@ -9,6 +9,12 @@ interface EditableTextProps {
   className?: string;
   multiline?: boolean;
   numeric?: boolean;
+  /** Input type when editing — 'date'/'time' for calendar and clock values. */
+  inputType?: 'text' | 'number' | 'date' | 'time';
+  /** How to render the saved value in read mode (e.g. money formatting). */
+  format?: (value: string) => string;
+  /** Rows for the multiline editor. */
+  rows?: number;
   align?: 'left' | 'right' | 'center';
   ariaLabel?: string;
   blank?: string; // string to show in display mode when value is empty
@@ -30,6 +36,9 @@ export function EditableText({
   className,
   multiline,
   numeric,
+  inputType,
+  format,
+  rows,
   align = 'left',
   ariaLabel,
   blank = '—',
@@ -72,10 +81,10 @@ export function EditableText({
           !value && 'text-muted/70',
           className
         )}
-        style={{ minHeight: multiline ? 56 : 32 }}
+        style={{ minHeight: multiline ? (rows ? rows * 22 : 56) : 32 }}
       >
         <span className={cn('min-w-0 flex-1 whitespace-pre-wrap', alignClass)}>
-          {value ? value : placeholder || blank}
+          {value ? (format ? format(value) : value) : placeholder || blank}
         </span>
         <Pencil
           size={11}
@@ -111,8 +120,9 @@ export function EditableText({
       <div className="flex flex-col gap-1">
         <textarea
           ref={ref as any}
+          rows={rows}
           className={cn('inline-edit', alignClass, className)}
-          style={{ minHeight: 56 }}
+          style={{ minHeight: rows ? undefined : 56 }}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -131,7 +141,7 @@ export function EditableText({
       <input
         ref={ref as any}
         className={cn('inline-edit min-w-0 flex-1', alignClass, className)}
-        type={numeric ? 'number' : 'text'}
+        type={inputType ?? (numeric ? 'number' : 'text')}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {

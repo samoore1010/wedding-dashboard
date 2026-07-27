@@ -46,12 +46,15 @@ export function Budget() {
       <Card title="Wedding Budget">
         <div className="flex items-center gap-3 flex-wrap mb-5">
           <span className="text-sm font-semibold">Total Budget</span>
-          <Input
-            type="number"
-            value={budgetTotal}
-            onChange={(e) => setBudgetTotal(Number(e.target.value) || 0)}
-            className="w-40"
-          />
+          <div className="w-40">
+            <EditableText
+              value={String(budgetTotal)}
+              numeric
+              ariaLabel="total budget"
+              format={(v) => fmtMoney(Number(v) || 0, cur)}
+              onChange={(next) => setBudgetTotal(Number(next) || 0)}
+            />
+          </div>
           {totalPct !== 100 && (
             <span className="text-xs text-warning">
               Allocations sum to {totalPct}% (target 100%)
@@ -150,12 +153,14 @@ export function Budget() {
                       {fmtMoney(alloc, cur)}
                     </td>
                     <td className="px-2 py-1.5">
-                      <Input
-                        type="number"
-                        value={sp || ''}
+                      <EditableText
+                        value={sp ? String(sp) : ''}
+                        numeric
+                        align="right"
                         placeholder="0"
-                        className="text-right"
-                        onChange={(e) => setBudgetSpent(c.id, Number(e.target.value) || 0)}
+                        ariaLabel={`spent on ${c.name}`}
+                        format={(v) => fmtMoney(Number(v) || 0, cur)}
+                        onChange={(next) => setBudgetSpent(c.id, Number(next) || 0)}
                       />
                     </td>
                     <td

@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Download, Upload, RotateCcw, Check } from 'lucide-react';
 import { useStore } from '../store';
 import { Button } from './ui/Button';
-import { Input, Select, LabeledField } from './ui/Field';
+import { Input, LabeledField } from './ui/Field';
 import { confirmAction } from './ui/ConfirmDialog';
+import { EditControls } from './ui/EditControls';
+import { useEditSession } from './ui/useEditSession';
 import { downloadJson, cn } from '../utils';
 import { DEFAULT_STATE } from '../defaults';
 import type { ThemeId } from '../types';
@@ -31,14 +33,44 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [savedFlash, setSavedFlash] = useState(false);
 
+  const flash = () => {
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 1200);
+  };
+
+  // Names, date and venue are drafted and saved together; picking a theme
+  // stays instant since it's a live preview, not data you can mistype.
+  const session = useEditSession(settings, (next) => {
+    updateSettings(next);
+    flash();
+  });
+  const draft = session.shown;
+  const { editing } = session;
+
+  const requestClose = useCallback(async () => {
+    if (
+      session.dirty &&
+      !(await confirmAction({
+        title: 'Discard changes?',
+        message: "You haven't saved your wedding details. Discard them?",
+        confirmLabel: 'Discard',
+        variant: 'danger',
+      }))
+    ) {
+      return;
+    }
+    session.cancel();
+    onClose();
+  }, [session, onClose]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') requestClose();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, requestClose]);
 
   const onExport = () => {
     const snapshot = useStore.getState();
@@ -91,11 +123,6 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     toast.success('Reset complete');
   };
 
-  const flash = () => {
-    setSavedFlash(true);
-    setTimeout(() => setSavedFlash(false), 1200);
-  };
-
   return (
     <div
       className={cn(
@@ -105,7 +132,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     >
       <div
         className="absolute inset-0 bg-ink/40 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={requestClose}
       />
       <aside
         className={cn(
@@ -119,7 +146,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
             <p className="text-xs text-muted">Make this dashboard yours</p>
           </div>
           <button
-            onClick={onClose}
+            onClick={requestClose}
             className="text-muted hover:text-ink p-1 rounded transition-colors"
             aria-label="Close settings"
           >
@@ -128,26 +155,29 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
         </div>
 
         <div className="p-5 space-y-7">
-          {/* Couple */}
+          {/* Couple + wedding details are drafted together and saved in one go. */}
+          <div className="flex items-center justify-between gap-2 -mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
+              {editing ? 'Editing details' : 'Wedding details'}
+            </span>
+            <EditControls session={session} size="sm" what="these details" />
+          </div>
+
           <Section title="The Couple">
             <div className="grid grid-cols-2 gap-3">
               <LabeledField label="Partner 1">
                 <Input
-                  value={settings.brideName}
-                  onChange={(e) => {
-                    updateSettings({ brideName: e.target.value });
-                    flash();
-                  }}
+                  value={draft.brideName}
+                  disabled={!editing}
+                  onChange={(e) => session.set({ brideName: e.target.value })}
                   placeholder="Drew"
                 />
               </LabeledField>
               <LabeledField label="Partner 2">
                 <Input
-                  value={settings.groomName}
-                  onChange={(e) => {
-                    updateSettings({ groomName: e.target.value });
-                    flash();
-                  }}
+                  value={draft.groomName}
+                  disabled={!editing}
+                  onChange={(e) => session.set({ groomName: e.target.value })}
                   placeholder="Steven"
                 />
               </LabeledField>
@@ -160,41 +190,33 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
               <LabeledField label="Date">
                 <Input
                   type="date"
-                  value={settings.weddingDate}
-                  onChange={(e) => {
-                    updateSettings({ weddingDate: e.target.value });
-                    flash();
-                  }}
+                  value={draft.weddingDate}
+                  disabled={!editing}
+                  onChange={(e) => session.set({ weddingDate: e.target.value })}
                 />
               </LabeledField>
               <LabeledField label="Ceremony Time">
                 <Input
                   type="time"
-                  value={settings.weddingTime}
-                  onChange={(e) => {
-                    updateSettings({ weddingTime: e.target.value });
-                    flash();
-                  }}
+                  value={draft.weddingTime}
+                  disabled={!editing}
+                  onChange={(e) => session.set({ weddingTime: e.target.value })}
                 />
               </LabeledField>
             </div>
             <LabeledField label="Venue Name (optional)">
               <Input
-                value={settings.venueName}
-                onChange={(e) => {
-                  updateSettings({ venueName: e.target.value });
-                  flash();
-                }}
+                value={draft.venueName}
+                disabled={!editing}
+                onChange={(e) => session.set({ venueName: e.target.value })}
                 placeholder="The Estate at Rosewood"
               />
             </LabeledField>
             <LabeledField label="Currency Symbol">
               <Input
-                value={settings.currency}
-                onChange={(e) => {
-                  updateSettings({ currency: e.target.value });
-                  flash();
-                }}
+                value={draft.currency}
+                disabled={!editing}
+                onChange={(e) => session.set({ currency: e.target.value })}
                 maxLength={3}
                 className="w-24"
               />

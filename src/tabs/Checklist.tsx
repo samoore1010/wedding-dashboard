@@ -93,43 +93,47 @@ export function Checklist() {
             key={phase}
             className="bg-surface border border-border rounded-xl2 shadow-soft overflow-hidden"
           >
-            <button
-              className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-br from-primary to-primary-soft text-white"
-              onClick={() => setOpen({ ...open, [phase]: !isOpen })}
-            >
-              <div className="flex items-center gap-2">
-                <ChevronDown
-                  size={16}
-                  className={cn('transition-transform', !isOpen && '-rotate-90')}
-                />
-                <h3 className="text-sm font-semibold">{phase}</h3>
-              </div>
-              <div className="flex items-center gap-3 text-xs opacity-90">
-                <span>
-                  {phDone} / {items.length}
-                </span>
-                <span className="bg-white/20 rounded-full px-2 py-0.5">{phP}%</span>
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    if (
-                      await confirmAction({
-                        title: 'Delete phase?',
-                        message: `Remove "${phase}" and all its tasks?`,
-                        confirmLabel: 'Delete',
-                        variant: 'danger',
-                      })
-                    ) {
-                      removePhase(phase);
-                    }
-                  }}
-                  className="hover:text-white text-white/70 p-1"
-                  aria-label={`Delete phase ${phase}`}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </button>
+            {/* Two sibling buttons — a delete button nested inside the header
+                button would be invalid HTML and unreachable by keyboard. */}
+            <div className="flex items-stretch bg-gradient-to-br from-primary to-primary-soft text-white">
+              <button
+                className="flex-1 flex items-center justify-between gap-3 px-4 py-3 min-w-0"
+                onClick={() => setOpen({ ...open, [phase]: !isOpen })}
+                aria-expanded={isOpen}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <ChevronDown
+                    size={16}
+                    className={cn('transition-transform shrink-0', !isOpen && '-rotate-90')}
+                  />
+                  <h3 className="text-sm font-semibold truncate">{phase}</h3>
+                </div>
+                <div className="flex items-center gap-3 text-xs opacity-90 shrink-0">
+                  <span>
+                    {phDone} / {items.length}
+                  </span>
+                  <span className="bg-white/20 rounded-full px-2 py-0.5">{phP}%</span>
+                </div>
+              </button>
+              <button
+                onClick={async () => {
+                  if (
+                    await confirmAction({
+                      title: 'Delete phase?',
+                      message: `Remove "${phase}" and all its tasks?`,
+                      confirmLabel: 'Delete',
+                      variant: 'danger',
+                    })
+                  ) {
+                    removePhase(phase);
+                  }
+                }}
+                className="hover:text-white text-white/70 px-3"
+                aria-label={`Delete phase ${phase}`}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
 
             {isOpen && (
               <div className="p-3">

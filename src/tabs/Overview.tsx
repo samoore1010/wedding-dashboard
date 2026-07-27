@@ -1,11 +1,11 @@
 import { useShallowStore } from '../store';
 import { Card } from '../components/ui/Card';
+import { EditableText } from '../components/ui/EditableText';
 import { StatCard } from '../components/ui/StatCard';
 import { ProgressBar } from '../components/ui/ProgressBar';
 import { Badge } from '../components/ui/Badge';
 import { BudgetDonut } from '../components/charts/BudgetDonut';
 import { GuestDonut } from '../components/charts/GuestDonut';
-import { Textarea } from '../components/ui/Field';
 import { fmtMoney, pct } from '../utils';
 import type { TabId, VendorStage } from '../types';
 
@@ -179,10 +179,12 @@ export function Overview({ onJump }: OverviewProps) {
       </div>
 
       <Card title="Quick Notes">
-        <Textarea
+        <EditableText
+          multiline
           rows={4}
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={setNotes}
+          ariaLabel="quick notes"
           placeholder="Jot down thoughts, ideas, reminders..."
         />
       </Card>

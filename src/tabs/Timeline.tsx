@@ -21,7 +21,7 @@ import { useShallowStore } from '../store';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { EditableText } from '../components/ui/EditableText';
-import { Select } from '../components/ui/Field';
+import { EditableSelect } from '../components/ui/EditableSelect';
 import { IconButton } from '../components/ui/IconButton';
 import { confirmAction } from '../components/ui/ConfirmDialog';
 import type { RunOfShowItem } from '../types';
@@ -139,14 +139,13 @@ export function Timeline() {
               {weekend.map((w) => (
                 <tr key={w.id} className="hover:bg-bg/40">
                   <td className="px-2 py-1.5">
-                    <Select
+                    <EditableSelect
                       value={w.day}
-                      onChange={(e) => updateWeekend(w.id, { day: e.target.value })}
-                    >
-                      {['Thursday', 'Friday', 'Saturday', 'Sunday', 'Monday'].map((d) => (
-                        <option key={d}>{d}</option>
-                      ))}
-                    </Select>
+                      options={['Thursday', 'Friday', 'Saturday', 'Sunday', 'Monday']}
+                      ariaLabel="day"
+                      onChange={(next) => updateWeekend(w.id, { day: next })}
+                      className="text-sm"
+                    />
                   </td>
                   <td className="px-2 py-1.5">
                     <EditableText
