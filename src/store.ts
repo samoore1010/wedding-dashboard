@@ -31,6 +31,15 @@ import { defaultWeddingParty, makePartyGroup, makePartyMember } from './weddingP
 import { uid } from './utils';
 import { cleanContacts, toContacts } from './guests/contacts';
 
+const makeCheckItem = (patch?: Partial<ChecklistItem>): ChecklistItem => ({
+  id: 'ci_' + uid(),
+  text: '',
+  notes: '',
+  links: [],
+  due: '',
+  ...patch,
+});
+
 const makeMember = (patch?: Partial<Member>): Member => ({
   id: 'm_' + uid(),
   name: '',
@@ -116,8 +125,8 @@ interface Actions {
 
   // Checklist
   toggleCheck: (id: string, value?: boolean) => void;
-  addCheckItem: (phase: string, text: string) => void;
-  updateCheckItem: (phase: string, id: string, text: string) => void;
+  addCheckItem: (phase: string, text: string) => string;
+  updateCheckItem: (phase: string, id: string, patch: Partial<ChecklistItem>) => void;
   removeCheckItem: (phase: string, id: string) => void;
   addPhase: (name: string) => void;
   removePhase: (name: string) => void;
@@ -380,20 +389,23 @@ export const useStore = create<AppState & Actions & UndoState>()(
             [id]: value !== undefined ? value : !s.checklist[id],
           },
         })),
-      addCheckItem: (phase, text) =>
+      addCheckItem: (phase, text) => {
+        const id = phase + '_' + uid();
         set((s) => {
           const list = s.checklistItems[phase] || [];
-          const item: ChecklistItem = { id: phase + '_' + uid(), text: text.trim() };
+          const item: ChecklistItem = makeCheckItem({ id, text: text.trim() });
           return {
             checklistItems: { ...s.checklistItems, [phase]: [...list, item] },
           };
-        }),
-      updateCheckItem: (phase, id, text) =>
+        });
+        return id;
+      },
+      updateCheckItem: (phase, id, patch) =>
         set((s) => ({
           checklistItems: {
             ...s.checklistItems,
             [phase]: (s.checklistItems[phase] || []).map((it) =>
-              it.id === id ? { ...it, text } : it
+              it.id === id ? { ...it, ...patch } : it
             ),
           },
         })),
@@ -879,7 +891,7 @@ export const useStore = create<AppState & Actions & UndoState>()(
     }),
     {
       name: 'wedding-dashboard-v1',
-      version: 10,
+      version: 11,
       // Undo history is session-only — never sync it to the server/localStorage.
       partialize: (s) => {
         const { undoStack: _u, ...rest } = s as any;
@@ -1005,6 +1017,20 @@ export const useStore = create<AppState & Actions & UndoState>()(
               }),
             };
           });
+        }
+        // v11: checklist tasks gained their own detail — notes, links, due date.
+        if (version < 11) {
+          persisted.checklistItems = Object.fromEntries(
+            Object.entries(persisted.checklistItems ?? {}).map(([phase, items]: [string, any]) => [
+              phase,
+              (items ?? []).map((it: any) => ({
+                notes: '',
+                links: [],
+                due: '',
+                ...it,
+              })),
+            ])
+          );
         }
         return persisted;
       },

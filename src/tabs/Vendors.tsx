@@ -4,8 +4,9 @@ import { useShallowStore } from '../store';
 import { Card } from '../components/ui/Card';
 import { StatCard } from '../components/ui/StatCard';
 import { Button } from '../components/ui/Button';
-import { Input, Select } from '../components/ui/Field';
+import { Input } from '../components/ui/Field';
 import { EditableText } from '../components/ui/EditableText';
+import { EditableSelect } from '../components/ui/EditableSelect';
 import { IconButton } from '../components/ui/IconButton';
 import { confirmAction } from '../components/ui/ConfirmDialog';
 import { cn } from '../utils';
@@ -138,25 +139,24 @@ export function Vendors() {
                     />
                   </td>
                   <td className="px-2 py-1.5">
-                    <Select
+                    <EditableSelect
                       value={v.stage}
-                      onChange={(e) =>
-                        updateVendor(v.id, { stage: e.target.value as VendorStage })
-                      }
-                      className={cn('text-xs font-semibold', stageColor(v.stage))}
-                    >
-                      {STAGES.map((s) => (
-                        <option key={s}>{s}</option>
-                      ))}
-                    </Select>
+                      options={STAGES}
+                      ariaLabel={`stage for ${v.name || v.type}`}
+                      onChange={(next) => updateVendor(v.id, { stage: next as VendorStage })}
+                      className="text-xs"
+                      displayClassName={cn('font-semibold', stageColor(v.stage))}
+                    />
                   </td>
                   <td className="px-2 py-1.5 text-right">
-                    <Input
-                      type="number"
+                    <EditableText
                       value={v.cost || ''}
+                      numeric
+                      align="right"
                       placeholder="$0"
-                      className="w-24 text-right"
-                      onChange={(e) => updateVendor(v.id, { cost: e.target.value })}
+                      ariaLabel={`cost for ${v.name || v.type}`}
+                      className="text-xs"
+                      onChange={(next) => updateVendor(v.id, { cost: next })}
                     />
                   </td>
                   <td className="px-2 py-1.5 min-w-[120px]">

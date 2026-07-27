@@ -295,14 +295,16 @@ function Lightbox({
           className="w-full max-h-[75vh] object-contain bg-ink"
         />
         <div className="p-4 space-y-2 border-t border-border">
-          <Input
+          <EditableText
             value={item.caption ?? ''}
-            onChange={(e) => onUpdate({ caption: e.target.value })}
+            onChange={(next) => onUpdate({ caption: next })}
+            ariaLabel="caption"
             placeholder="Caption"
           />
-          <Input
+          <EditableText
             value={item.section ?? ''}
-            onChange={(e) => onUpdate({ section: e.target.value.trim() || undefined })}
+            onChange={(next) => onUpdate({ section: next.trim() || undefined })}
+            ariaLabel="section tag"
             placeholder='Section tag (e.g. "Florals")'
           />
         </div>

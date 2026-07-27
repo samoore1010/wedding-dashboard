@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { Search, Plus, Trash2, X, Crown, UserPlus, GripVertical } from 'lucide-react';
 import { useShallowStore } from '../store';
 import { Card } from '../components/ui/Card';
@@ -9,6 +9,8 @@ import { Modal } from '../components/ui/Modal';
 import { EditableText } from '../components/ui/EditableText';
 import { IconButton } from '../components/ui/IconButton';
 import { confirmAction } from '../components/ui/ConfirmDialog';
+import { EditControls } from '../components/ui/EditControls';
+import { useEditSession } from '../components/ui/useEditSession';
 import { cn } from '../utils';
 import { PARTY_ROLES, ATTIRE_STATUSES } from '../weddingParty';
 import type { PartyAsk, PartyGroup, PartyMember } from '../types';
@@ -233,7 +235,7 @@ export function WeddingParty() {
         displayName={openMember ? liveName(openMember) : ''}
         groups={party.groups}
         onClose={() => setOpenId(null)}
-        onChange={(patch) => openMember && s.updatePartyMember(openMember.id, patch)}
+        onSave={(next) => openMember && s.updatePartyMember(openMember.id, next)}
         onDelete={async () => {
           if (!openMember) return;
           if (
@@ -482,33 +484,76 @@ function AddMemberModal({
 
 /* ------------------------------- Drawer ---------------------------------- */
 
+/** Stand-in while the drawer is closed, so the edit session always has a shape. */
+const EMPTY_PARTY_MEMBER: PartyMember = {
+  id: '',
+  groupId: '',
+  householdId: '',
+  memberId: '',
+  name: '',
+  role: '',
+  ask: 'Not yet',
+  attireSize: '',
+  attireStatus: '',
+  gift: '',
+  thankYou: false,
+  contact: '',
+  notes: '',
+};
+
 function MemberDrawer({
   member: m,
   displayName,
   groups,
   onClose,
-  onChange,
+  onSave,
   onDelete,
 }: {
   member: PartyMember | null;
   displayName: string;
   groups: PartyGroup[];
   onClose: () => void;
-  onChange: (patch: Partial<PartyMember>) => void;
+  onSave: (next: PartyMember) => void;
   onDelete: () => void;
 }) {
   const open = !!m;
+  // Held as a draft — nothing here reaches the wedding party until Save.
+  const s = useEditSession(m ?? EMPTY_PARTY_MEMBER, onSave);
+  const d = s.shown;
+  const { editing } = s;
+
+  const cancelEdit = s.cancel;
+  useEffect(() => {
+    cancelEdit();
+  }, [m?.id, cancelEdit]);
+
+  const requestClose = useCallback(async () => {
+    if (
+      s.dirty &&
+      !(await confirmAction({
+        title: 'Discard changes?',
+        message: "You haven't saved your changes to this person. Discard them?",
+        confirmLabel: 'Discard',
+        variant: 'danger',
+      }))
+    ) {
+      return;
+    }
+    s.cancel();
+    onClose();
+  }, [s, onClose]);
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && requestClose();
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, requestClose]);
 
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={requestClose}
         className={cn(
           'fixed inset-0 z-40 bg-ink/40 transition-opacity',
           open ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -534,21 +579,33 @@ function MemberDrawer({
                   <span className="text-[11px] text-muted">Not on the guest list</span>
                 )}
               </div>
-              <IconButton onClick={onClose} aria-label="Close">
-                <X size={16} />
-              </IconButton>
+              <div className="flex items-center gap-2 shrink-0">
+                <EditControls session={s} size="sm" what="this person" />
+                <IconButton onClick={requestClose} aria-label="Close">
+                  <X size={16} />
+                </IconButton>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
-              {!m.memberId && (
+              {!d.memberId && (
                 <LabeledField label="Name">
-                  <Input value={m.name} onChange={(e) => onChange({ name: e.target.value })} placeholder="Full name" />
+                  <Input
+                    value={d.name}
+                    disabled={!editing}
+                    onChange={(e) => s.set({ name: e.target.value })}
+                    placeholder="Full name"
+                  />
                 </LabeledField>
               )}
 
               <div className="grid grid-cols-2 gap-3">
                 <LabeledField label="Group">
-                  <Select value={m.groupId} onChange={(e) => onChange({ groupId: e.target.value })}>
+                  <Select
+                    value={d.groupId}
+                    disabled={!editing}
+                    onChange={(e) => s.set({ groupId: e.target.value })}
+                  >
                     {groups.map((g) => (
                       <option key={g.id} value={g.id}>
                         {g.label || 'Untitled'}
@@ -559,8 +616,9 @@ function MemberDrawer({
                 <LabeledField label="Role">
                   <Input
                     list="party-roles"
-                    value={m.role}
-                    onChange={(e) => onChange({ role: e.target.value })}
+                    value={d.role}
+                    disabled={!editing}
+                    onChange={(e) => s.set({ role: e.target.value })}
                     placeholder="e.g. Best Man"
                   />
                   <datalist id="party-roles">
@@ -576,10 +634,11 @@ function MemberDrawer({
                   {ASK_OPTIONS.map((a) => (
                     <button
                       key={a}
-                      onClick={() => onChange({ ask: a })}
+                      disabled={!editing}
+                      onClick={() => s.set({ ask: a })}
                       className={cn(
-                        'h-9 text-[11px] font-semibold transition-colors',
-                        m.ask === a
+                        'h-9 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed',
+                        d.ask === a
                           ? a === 'Confirmed'
                             ? 'bg-success text-white'
                             : a === 'Asked'
@@ -598,10 +657,19 @@ function MemberDrawer({
 
               <div className="grid grid-cols-2 gap-3">
                 <LabeledField label="Attire size">
-                  <Input value={m.attireSize} onChange={(e) => onChange({ attireSize: e.target.value })} placeholder="e.g. 40R" />
+                  <Input
+                    value={d.attireSize}
+                    disabled={!editing}
+                    onChange={(e) => s.set({ attireSize: e.target.value })}
+                    placeholder="e.g. 40R"
+                  />
                 </LabeledField>
                 <LabeledField label="Attire status">
-                  <Select value={m.attireStatus} onChange={(e) => onChange({ attireStatus: e.target.value })}>
+                  <Select
+                    value={d.attireStatus}
+                    disabled={!editing}
+                    onChange={(e) => s.set({ attireStatus: e.target.value })}
+                  >
                     <option value="">—</option>
                     {ATTIRE_STATUSES.map((a) => (
                       <option key={a}>{a}</option>
@@ -611,27 +679,44 @@ function MemberDrawer({
               </div>
 
               <LabeledField label="Proposal gift">
-                <Input value={m.gift} onChange={(e) => onChange({ gift: e.target.value })} placeholder="Idea / what you gave" />
+                <Input
+                  value={d.gift}
+                  disabled={!editing}
+                  onChange={(e) => s.set({ gift: e.target.value })}
+                  placeholder="Idea / what you gave"
+                />
               </LabeledField>
 
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <label
+                className={cn(
+                  'flex items-center gap-2 text-sm',
+                  editing ? 'cursor-pointer' : 'cursor-default'
+                )}
+              >
                 <input
                   type="checkbox"
-                  checked={m.thankYou}
-                  onChange={(e) => onChange({ thankYou: e.target.checked })}
+                  checked={d.thankYou}
+                  disabled={!editing}
+                  onChange={(e) => s.set({ thankYou: e.target.checked })}
                   className="h-4 w-4 accent-[rgb(var(--c-accent))]"
                 />
                 Thank-you sent
               </label>
 
               <LabeledField label="Contact">
-                <Input value={m.contact} onChange={(e) => onChange({ contact: e.target.value })} placeholder="Phone / email" />
+                <Input
+                  value={d.contact}
+                  disabled={!editing}
+                  onChange={(e) => s.set({ contact: e.target.value })}
+                  placeholder="Phone / email"
+                />
               </LabeledField>
 
               <LabeledField label="Notes">
                 <Textarea
-                  value={m.notes}
-                  onChange={(e) => onChange({ notes: e.target.value })}
+                  value={d.notes}
+                  disabled={!editing}
+                  onChange={(e) => s.set({ notes: e.target.value })}
                   rows={2}
                   placeholder="Anything to remember…"
                 />
@@ -639,10 +724,20 @@ function MemberDrawer({
             </div>
 
             <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-t border-border">
-              <Button variant="ghost" className="text-danger" icon={<Trash2 size={14} />} onClick={onDelete}>
+              <Button
+                variant="ghost"
+                className="text-danger"
+                icon={<Trash2 size={14} />}
+                disabled={editing}
+                onClick={onDelete}
+              >
                 Remove
               </Button>
-              <Button onClick={onClose}>Done</Button>
+              {editing ? (
+                <EditControls session={s} what="this person" />
+              ) : (
+                <Button onClick={requestClose}>Done</Button>
+              )}
             </div>
           </>
         )}

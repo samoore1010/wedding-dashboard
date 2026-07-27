@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import {
   Trash2,
   Search,
@@ -23,7 +23,9 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { IconButton } from '../components/ui/IconButton';
 import { confirmAction } from '../components/ui/ConfirmDialog';
 import type { Household, Member, GuestGroup, GuestSide, GuestStatus, GuestList, MemberKind } from '../types';
-import { cn, householdSize, repliedCount, suggestLabel } from '../utils';
+import { cn, householdSize, repliedCount, suggestLabel, uid } from '../utils';
+import { EditControls } from '../components/ui/EditControls';
+import { useEditSession } from '../components/ui/useEditSession';
 import { exportGuestsCsv } from '../guests/csv';
 import { toContacts } from '../guests/contacts';
 import { exportGuestsPdf, type PdfGroup } from '../guests/pdf';
@@ -311,10 +313,16 @@ export function Guests() {
       <EditDrawer
         household={openHousehold}
         onClose={() => setOpenId(null)}
-        onUpdateHousehold={(patch) => openHousehold && updateHousehold(openHousehold.id, patch)}
-        onAddMember={() => openHousehold && addMember(openHousehold.id)}
-        onUpdateMember={(mid, patch) => openHousehold && updateMember(openHousehold.id, mid, patch)}
-        onRemoveMember={(mid) => openHousehold && removeMember(openHousehold.id, mid)}
+        onSave={(next) => {
+          if (!openHousehold) return;
+          // People dropped in the drawer go through removeMember so their
+          // wedding-party links get cleaned up too; the rest saves in one patch.
+          const kept = new Set(next.members.map((m) => m.id));
+          for (const m of openHousehold.members) {
+            if (!kept.has(m.id)) removeMember(openHousehold.id, m.id);
+          }
+          updateHousehold(openHousehold.id, next);
+        }}
         onDelete={async () => {
           if (!openHousehold) return;
           const name = openHousehold.label || suggestLabel(openHousehold.members) || 'this household';
@@ -676,36 +684,75 @@ function HouseholdCard({
 
 /* -------------------------------- Edit drawer ------------------------------ */
 
+const EMPTY_HOUSEHOLD: Household = {
+  id: '',
+  label: '',
+  group: 'Couple Friends',
+  side: 'Both',
+  list: 'Invited',
+  emails: [],
+  phones: [],
+  address: '',
+  inviteSent: false,
+  notes: '',
+  table: '',
+  members: [],
+};
+
 function EditDrawer({
   household: h,
   onClose,
-  onUpdateHousehold,
-  onAddMember,
-  onUpdateMember,
-  onRemoveMember,
+  onSave,
   onDelete,
 }: {
   household: Household | null;
   onClose: () => void;
-  onUpdateHousehold: (patch: Partial<Household>) => void;
-  onAddMember: () => void;
-  onUpdateMember: (memberId: string, patch: Partial<Member>) => void;
-  onRemoveMember: (memberId: string) => void;
+  onSave: (next: Household) => void;
   onDelete: () => void;
 }) {
   const open = !!h;
+  // Nothing typed here reaches the guest list until Save is pressed.
+  const s = useEditSession(h ?? EMPTY_HOUSEHOLD, onSave);
+  const draft = s.shown;
+  const { editing } = s;
+
+  const setMember = (id: string, patch: Partial<Member>) =>
+    s.set({ members: draft.members.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
+
+  // The drawer stays mounted between households — never carry a draft over.
+  const cancelEdit = s.cancel;
+  useEffect(() => {
+    cancelEdit();
+  }, [h?.id, cancelEdit]);
+
+  // Closing mid-edit would silently drop the draft, so ask first.
+  const requestClose = useCallback(async () => {
+    if (
+      s.dirty &&
+      !(await confirmAction({
+        title: 'Discard changes?',
+        message: "You haven't saved your changes to this household. Discard them?",
+        confirmLabel: 'Discard',
+        variant: 'danger',
+      }))
+    ) {
+      return;
+    }
+    s.cancel();
+    onClose();
+  }, [s, onClose]);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && requestClose();
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, requestClose]);
 
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={requestClose}
         className={cn(
           'fixed inset-0 z-40 bg-ink/40 transition-opacity',
           open ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -720,11 +767,16 @@ function EditDrawer({
       >
         {h && (
           <>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h3 className="font-semibold text-ink">Edit household</h3>
-              <IconButton onClick={onClose} aria-label="Close">
-                <X size={16} />
-              </IconButton>
+            <div className="flex items-center justify-between gap-2 px-5 py-4 border-b border-border">
+              <h3 className="font-semibold text-ink shrink-0">
+                {editing ? 'Editing household' : 'Household'}
+              </h3>
+              <div className="flex items-center gap-2">
+                <EditControls session={s} size="sm" what="this household" />
+                <IconButton onClick={requestClose} aria-label="Close">
+                  <X size={16} />
+                </IconButton>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
@@ -734,9 +786,10 @@ function EditDrawer({
                 <div className="space-y-3">
                   <Labeled label="Household label">
                     <Input
-                      value={h.label}
-                      onChange={(e) => onUpdateHousehold({ label: e.target.value })}
-                      placeholder={suggestLabel(h.members) || 'e.g. The Smith Family'}
+                      value={draft.label}
+                      disabled={!editing}
+                      onChange={(e) => s.set({ label: e.target.value })}
+                      placeholder={suggestLabel(draft.members) || 'e.g. The Smith Family'}
                     />
                   </Labeled>
                   <Labeled label="Guest list">
@@ -744,10 +797,11 @@ function EditDrawer({
                       {LISTS.map((l) => (
                         <button
                           key={l}
-                          onClick={() => onUpdateHousehold({ list: l })}
+                          disabled={!editing}
+                          onClick={() => s.set({ list: l })}
                           className={cn(
-                            'h-9 text-[11px] font-semibold transition-colors',
-                            glist(h) === l
+                            'h-9 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed',
+                            glist(draft) === l
                               ? l === 'Invited'
                                 ? 'bg-primary text-white'
                                 : 'bg-warning text-white'
@@ -762,8 +816,9 @@ function EditDrawer({
                   <div className="grid grid-cols-2 gap-3">
                     <Labeled label="Side">
                       <Select
-                        value={h.side}
-                        onChange={(e) => onUpdateHousehold({ side: e.target.value as GuestSide })}
+                        value={draft.side}
+                        disabled={!editing}
+                        onChange={(e) => s.set({ side: e.target.value as GuestSide })}
                       >
                         {SIDES.map((s) => (
                           <option key={s}>{s}</option>
@@ -772,8 +827,9 @@ function EditDrawer({
                     </Labeled>
                     <Labeled label="Relationship">
                       <Select
-                        value={h.group}
-                        onChange={(e) => onUpdateHousehold({ group: e.target.value as GuestGroup })}
+                        value={draft.group}
+                        disabled={!editing}
+                        onChange={(e) => s.set({ group: e.target.value as GuestGroup })}
                       >
                         {GROUPS.map((g) => (
                           <option key={g}>{g}</option>
@@ -787,22 +843,25 @@ function EditDrawer({
                       type="email"
                       placeholder="name@email.com"
                       addLabel="Add email"
-                      values={h.emails}
-                      onChange={(emails) => onUpdateHousehold({ emails })}
+                      values={draft.emails}
+                      disabled={!editing}
+                      onChange={(emails) => s.set({ emails })}
                     />
                     <ContactList
                       label="Household phones"
                       type="tel"
                       placeholder="(555) 123-4567"
                       addLabel="Add phone"
-                      values={h.phones}
-                      onChange={(phones) => onUpdateHousehold({ phones })}
+                      values={draft.phones}
+                      disabled={!editing}
+                      onChange={(phones) => s.set({ phones })}
                     />
                   </div>
                   <Labeled label="Invitation">
                     <Select
-                      value={h.inviteSent ? 'Sent' : 'Not sent'}
-                      onChange={(e) => onUpdateHousehold({ inviteSent: e.target.value === 'Sent' })}
+                      value={draft.inviteSent ? 'Sent' : 'Not sent'}
+                      disabled={!editing}
+                      onChange={(e) => s.set({ inviteSent: e.target.value === 'Sent' })}
                     >
                       <option>Not sent</option>
                       <option>Sent</option>
@@ -810,8 +869,9 @@ function EditDrawer({
                   </Labeled>
                   <Labeled label="Notes">
                     <Input
-                      value={h.notes}
-                      onChange={(e) => onUpdateHousehold({ notes: e.target.value })}
+                      value={draft.notes}
+                      disabled={!editing}
+                      onChange={(e) => s.set({ notes: e.target.value })}
                       placeholder="Anything to remember…"
                     />
                   </Labeled>
@@ -821,33 +881,46 @@ function EditDrawer({
               {/* Members */}
               <section>
                 <div className="text-[11px] font-bold uppercase tracking-wider text-muted mb-3">
-                  People · {h.members.length}
+                  People · {draft.members.length}
                 </div>
                 <div className="space-y-2.5">
-                  {h.members.map((m) => (
+                  {draft.members.map((m) => (
                     <MemberRow
                       key={m.id}
                       member={m}
-                      canDelete={h.members.length > 1}
-                      onChange={(patch) => onUpdateMember(m.id, patch)}
-                      onRemove={() => onRemoveMember(m.id)}
+                      editing={editing}
+                      canDelete={draft.members.length > 1}
+                      onChange={(patch) => setMember(m.id, patch)}
+                      onRemove={() => s.set({ members: draft.members.filter((x) => x.id !== m.id) })}
                     />
                   ))}
                 </div>
-                <button
-                  onClick={onAddMember}
-                  className="mt-2.5 w-full border border-dashed border-border rounded-xl2 py-2.5 text-xs font-semibold text-primary hover:border-accent hover:bg-accent/5 transition-colors inline-flex items-center justify-center gap-1.5"
-                >
-                  <Plus size={14} /> Add person
-                </button>
+                {editing && (
+                  <button
+                    onClick={() => s.set({ members: [...draft.members, blankMember()] })}
+                    className="mt-2.5 w-full border border-dashed border-border rounded-xl2 py-2.5 text-xs font-semibold text-primary hover:border-accent hover:bg-accent/5 transition-colors inline-flex items-center justify-center gap-1.5"
+                  >
+                    <Plus size={14} /> Add person
+                  </button>
+                )}
               </section>
             </div>
 
             <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-t border-border">
-              <Button variant="ghost" className="text-danger" icon={<Trash2 size={14} />} onClick={onDelete}>
+              <Button
+                variant="ghost"
+                className="text-danger"
+                icon={<Trash2 size={14} />}
+                disabled={editing}
+                onClick={onDelete}
+              >
                 Delete
               </Button>
-              <Button onClick={onClose}>Done</Button>
+              {editing ? (
+                <EditControls session={s} size="md" what="this household" />
+              ) : (
+                <Button onClick={requestClose}>Done</Button>
+              )}
             </div>
           </>
         )}
@@ -856,13 +929,27 @@ function EditDrawer({
   );
 }
 
+/** A blank person added to a household draft; saved only with the drawer. */
+const blankMember = (): Member => ({
+  id: 'm_' + uid(),
+  name: '',
+  kind: 'adult',
+  rsvp: 'Waiting',
+  meal: '',
+  dietary: '',
+  emails: [],
+  phones: [],
+});
+
 function MemberRow({
   member: m,
+  editing,
   canDelete,
   onChange,
   onRemove,
 }: {
   member: Member;
+  editing: boolean;
   canDelete: boolean;
   onChange: (patch: Partial<Member>) => void;
   onRemove: () => void;
@@ -872,20 +959,26 @@ function MemberRow({
       <div className="flex items-center gap-2">
         <Input
           value={m.name}
+          disabled={!editing}
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder="Full name"
           className="flex-1 h-8 py-0"
         />
-        <KindToggle value={m.kind} onChange={(kind) => onChange({ kind })} />
-        {canDelete && (
+        <KindToggle value={m.kind} disabled={!editing} onChange={(kind) => onChange({ kind })} />
+        {canDelete && editing && (
           <IconButton tone="danger" onClick={onRemove} aria-label={`Remove ${m.name || 'person'}`}>
             <Trash2 size={13} />
           </IconButton>
         )}
       </div>
-      <RsvpToggle value={m.rsvp} onChange={(rsvp) => onChange({ rsvp })} />
+      <RsvpToggle value={m.rsvp} disabled={!editing} onChange={(rsvp) => onChange({ rsvp })} />
       <div className="grid grid-cols-2 gap-2">
-        <Select value={m.meal} onChange={(e) => onChange({ meal: e.target.value })} className="text-xs h-8 py-0">
+        <Select
+          value={m.meal}
+          disabled={!editing}
+          onChange={(e) => onChange({ meal: e.target.value })}
+          className="text-xs h-8 py-0"
+        >
           {MEALS.map((o) => (
             <option key={o} value={o}>
               {o || '— meal —'}
@@ -894,6 +987,7 @@ function MemberRow({
         </Select>
         <Input
           value={m.dietary}
+          disabled={!editing}
           onChange={(e) => onChange({ dietary: e.target.value })}
           placeholder="Dietary notes"
           className="text-xs h-8 py-0"
@@ -905,6 +999,7 @@ function MemberRow({
           placeholder="Email"
           addLabel="Add email"
           compact
+          disabled={!editing}
           values={m.emails}
           onChange={(emails) => onChange({ emails })}
         />
@@ -913,6 +1008,7 @@ function MemberRow({
           placeholder="Phone"
           addLabel="Add phone"
           compact
+          disabled={!editing}
           values={m.phones}
           onChange={(phones) => onChange({ phones })}
         />
@@ -922,9 +1018,10 @@ function MemberRow({
 }
 
 /**
- * Editor for one multi-value contact list (emails or phones). Always shows at
- * least one box; blurring normalises the list, so pasting "555-0100, 555-0101"
- * into a single box splits it into two entries rather than storing it as one.
+ * Editor for one multi-value contact list (emails or phones). Read-only until
+ * the panel is unlocked; while editing it always shows at least one box, and
+ * blurring normalises the list, so pasting "555-0100, 555-0101" into a single
+ * box splits it into two entries rather than storing it as one.
  */
 function ContactList({
   label,
@@ -933,6 +1030,7 @@ function ContactList({
   placeholder,
   addLabel,
   compact = false,
+  disabled = false,
   onChange,
 }: {
   label?: string;
@@ -941,9 +1039,10 @@ function ContactList({
   placeholder: string;
   addLabel: string;
   compact?: boolean;
+  disabled?: boolean;
   onChange: (values: string[]) => void;
 }) {
-  const shown = values.length ? values : [''];
+  const shown = disabled ? values : values.length ? values : [''];
   const same = (a: string[], b: string[]) => a.length === b.length && a.every((v, i) => v === b[i]);
   const normalize = () => {
     const next = toContacts(shown);
@@ -952,17 +1051,23 @@ function ContactList({
 
   const rows = (
     <div className="space-y-1.5">
+      {shown.length === 0 && (
+        <p className={cn('text-muted/70', compact ? 'text-xs py-1.5' : 'text-sm py-2')}>
+          None yet
+        </p>
+      )}
       {shown.map((v, i) => (
         <div key={i} className="flex items-center gap-1">
           <Input
             type={type}
             value={v}
+            disabled={disabled}
             onChange={(e) => onChange(shown.map((x, j) => (j === i ? e.target.value : x)))}
             onBlur={normalize}
             placeholder={placeholder}
             className={cn('flex-1 min-w-0', compact && 'text-xs h-8 py-0')}
           />
-          {shown.length > 1 && (
+          {!disabled && shown.length > 1 && (
             <button
               onClick={() => onChange(shown.filter((_, j) => j !== i))}
               className="shrink-0 p-1 text-muted hover:text-danger rounded"
@@ -973,12 +1078,14 @@ function ContactList({
           )}
         </div>
       ))}
-      <button
-        onClick={() => onChange([...toContacts(shown), ''])}
-        className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-accent"
-      >
-        <Plus size={11} /> {addLabel}
-      </button>
+      {!disabled && (
+        <button
+          onClick={() => onChange([...toContacts(shown), ''])}
+          className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-accent"
+        >
+          <Plus size={11} /> {addLabel}
+        </button>
+      )}
     </div>
   );
 
@@ -991,15 +1098,24 @@ function ContactList({
   );
 }
 
-function KindToggle({ value, onChange }: { value: MemberKind; onChange: (v: MemberKind) => void }) {
+function KindToggle({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: MemberKind;
+  disabled?: boolean;
+  onChange: (v: MemberKind) => void;
+}) {
   return (
     <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">
       {(['adult', 'child'] as MemberKind[]).map((k) => (
         <button
           key={k}
+          disabled={disabled}
           onClick={() => onChange(k)}
           className={cn(
-            'px-2.5 h-8 text-[11px] font-semibold capitalize transition-colors',
+            'px-2.5 h-8 text-[11px] font-semibold capitalize transition-colors disabled:cursor-not-allowed',
             value === k ? 'bg-primary text-white' : 'bg-surface text-muted hover:text-ink'
           )}
         >
@@ -1010,7 +1126,15 @@ function KindToggle({ value, onChange }: { value: MemberKind; onChange: (v: Memb
   );
 }
 
-function RsvpToggle({ value, onChange }: { value: GuestStatus; onChange: (v: GuestStatus) => void }) {
+function RsvpToggle({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: GuestStatus;
+  disabled?: boolean;
+  onChange: (v: GuestStatus) => void;
+}) {
   const active: Record<GuestStatus, string> = {
     Yes: 'bg-success text-white',
     Waiting: 'bg-warning text-white',
@@ -1021,9 +1145,10 @@ function RsvpToggle({ value, onChange }: { value: GuestStatus; onChange: (v: Gue
       {RSVPS.map((r) => (
         <button
           key={r}
+          disabled={disabled}
           onClick={() => onChange(r)}
           className={cn(
-            'h-8 text-[11px] font-semibold transition-colors',
+            'h-8 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed',
             value === r ? active[r] : 'bg-surface text-muted hover:text-ink'
           )}
         >

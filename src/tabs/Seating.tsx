@@ -4,8 +4,9 @@ import { useShallowStore } from '../store';
 import { Card } from '../components/ui/Card';
 import { StatCard } from '../components/ui/StatCard';
 import { Button } from '../components/ui/Button';
-import { Input, Select } from '../components/ui/Field';
+import { Input } from '../components/ui/Field';
 import { EditableText } from '../components/ui/EditableText';
+import { EditableSelect } from '../components/ui/EditableSelect';
 import { IconButton } from '../components/ui/IconButton';
 import { confirmAction } from '../components/ui/ConfirmDialog';
 import { cn } from '../utils';
@@ -331,23 +332,30 @@ function TableCard({
       </div>
 
       <div className="flex items-center gap-2 mb-3 text-xs">
-        <Select
-          value={table.type}
-          onChange={(e) => onType(e.target.value as SeatingTable['type'])}
-          className="text-xs h-7 py-0 flex-1"
-        >
-          <option value="regular">Regular</option>
-          <option value="kings">Kings</option>
-          <option value="sweetheart">Sweetheart</option>
-        </Select>
+        <div className="flex-1 min-w-0">
+          <EditableSelect
+            value={table.type}
+            options={[
+              { value: 'regular', label: 'Regular' },
+              { value: 'kings', label: 'Kings' },
+              { value: 'sweetheart', label: 'Sweetheart' },
+            ]}
+            ariaLabel="table shape"
+            onChange={(next) => onType(next as SeatingTable['type'])}
+            className="text-xs h-7 py-0"
+          />
+        </div>
         <span className="text-muted whitespace-nowrap">Cap.</span>
-        <Input
-          type="number"
-          min={1}
-          value={cap}
-          onChange={(e) => onCapacity(Number(e.target.value) || 1)}
-          className="w-14 h-7 py-0 text-xs text-center"
-        />
+        <div className="w-16">
+          <EditableText
+            value={String(cap)}
+            numeric
+            align="center"
+            ariaLabel="table capacity"
+            className="text-xs"
+            onChange={(next) => onCapacity(Number(next) || 1)}
+          />
+        </div>
         <span
           className={cn(
             'text-xs whitespace-nowrap tabular-nums',

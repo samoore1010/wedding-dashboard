@@ -3,8 +3,8 @@ import { useShallowStore } from '../store';
 import { Card } from '../components/ui/Card';
 import { StatCard } from '../components/ui/StatCard';
 import { Button } from '../components/ui/Button';
-import { Input, Select } from '../components/ui/Field';
 import { EditableText } from '../components/ui/EditableText';
+import { EditableSelect } from '../components/ui/EditableSelect';
 import { EmptyState } from '../components/ui/EmptyState';
 import { IconButton } from '../components/ui/IconButton';
 import { confirmAction } from '../components/ui/ConfirmDialog';
@@ -115,22 +115,22 @@ function GiftRow({
         />
       </td>
       <td className="px-2 py-1.5">
-        <Select
+        <EditableSelect
           value={gift.type}
-          onChange={(e) => onUpdate({ type: e.target.value as Gift['type'] })}
+          options={['Cash/Check', 'Registry', 'Other']}
+          ariaLabel="gift type"
+          onChange={(next) => onUpdate({ type: next as Gift['type'] })}
           className="text-xs"
-        >
-          <option>Cash/Check</option>
-          <option>Registry</option>
-          <option>Other</option>
-        </Select>
+        />
       </td>
       <td className="px-2 py-1.5">
-        <Input
-          type="date"
+        <EditableText
           value={gift.received || ''}
-          onChange={(e) => onUpdate({ received: e.target.value })}
+          inputType="date"
+          placeholder="Date"
+          ariaLabel="date received"
           className="text-xs"
+          onChange={(next) => onUpdate({ received: next })}
         />
       </td>
       <td className="px-2 py-1.5 text-center">
