@@ -453,19 +453,27 @@ export const useStore = create<AppState & Actions & UndoState>()(
         set((s) => ({ vendors: s.vendors.filter((v) => v.id !== id) })),
 
       addTable: (t) =>
-        set((s) => ({
-          seating: [
-            ...s.seating,
-            {
-              id: 's_' + uid(),
-              name: 'Table ' + s.seating.length,
-              type: 'regular',
-              guestIds: [],
-              capacity: 8,
-              ...t,
-            },
-          ],
-        })),
+        set((s) => {
+          // Households record where they sit by table *name*, so two tables
+          // sharing a name are indistinguishable on the Guests tab. Skip past
+          // any number already in use rather than counting from the length.
+          const taken = new Set(s.seating.map((x) => x.name.trim()));
+          let n = s.seating.length + 1;
+          while (taken.has(`Table ${n}`)) n++;
+          return {
+            seating: [
+              ...s.seating,
+              {
+                id: 's_' + uid(),
+                name: `Table ${n}`,
+                type: 'regular',
+                guestIds: [],
+                capacity: 8,
+                ...t,
+              },
+            ],
+          };
+        }),
       updateTable: (id, patch) =>
         set((s) => {
           const newSeating = s.seating.map((t) =>
