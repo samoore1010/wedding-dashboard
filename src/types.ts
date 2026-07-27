@@ -74,6 +74,83 @@ export type VendorStage =
   | 'Booked'
   | 'Paid in Full';
 
+/** A loose idea pinned to a vendor category before any names are in play. */
+export interface VendorPin {
+  id: string;
+  /** Uploaded image src, if this pin is a screenshot / photo. */
+  image: string;
+  /** Instagram post, website, video… */
+  url: string;
+  caption: string;
+}
+
+/** A question to put to a vendor, and what they said. */
+export interface VendorQuestion {
+  id: string;
+  text: string;
+  answer: string;
+  asked: boolean;
+}
+
+/** One dated entry in a vendor's contact history. */
+export interface VendorLogEntry {
+  id: string;
+  /** ISO yyyy-mm-dd. */
+  date: string;
+  /** Called / Emailed / Met / Quote received … */
+  kind: string;
+  note: string;
+}
+
+/** A real business you're considering (or have booked) for a category. */
+export interface VendorCandidate {
+  id: string;
+  name: string;
+  /** Carried over when a pin is promoted into a candidate. */
+  image: string;
+
+  // --- while shortlisting
+  /** 0 = unrated, otherwise 1–5. */
+  rating: number;
+  quote: string;
+  available: 'Yes' | 'No' | 'Unknown';
+  packageName: string;
+  pros: string;
+  cons: string;
+
+  // --- contact
+  contact: string;
+  emails: string[];
+  phones: string[];
+  website: string;
+  instagram: string;
+
+  // --- money
+  finalPrice: string;
+  deposit: string;
+  depositPaid: string;
+  included: string;
+  extras: string;
+
+  // --- logistics, once booked
+  contractSigned: string;
+  arrivalTime: string;
+  coverageHours: string;
+  setupNeeds: string;
+  cancellation: string;
+
+  questions: VendorQuestion[];
+  log: VendorLogEntry[];
+  links: ChecklistLink[];
+  notes: string;
+}
+
+/**
+ * One vendor category (Photographer, DJ / Band…). It carries the whole arc of
+ * the decision: loose ideas first, then candidates to compare, then the one
+ * you book — whose details are mirrored onto the headline fields so the
+ * tracker table, budget and assistant keep seeing a simple row.
+ */
 export interface Vendor {
   id: string;
   type: string;
@@ -83,7 +160,15 @@ export interface Vendor {
   email: string;
   stage: VendorStage;
   cost: string;
+  /** What you're going for — "DJ or band?", must-haves, open questions. */
   notes: string;
+
+  pins: VendorPin[];
+  candidates: VendorCandidate[];
+  /** Candidate id you've booked, or '' while still deciding. */
+  chosenId: string;
+  /** Budget category this vendor is paid from; shown, never auto-applied. */
+  budgetCatId: string;
 }
 
 export interface ChecklistLink {

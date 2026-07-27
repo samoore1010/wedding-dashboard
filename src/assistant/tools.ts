@@ -558,6 +558,116 @@ export const TOOLS: AssistantTool[] = [
     },
   },
 
+  {
+    name: 'add_vendor_idea',
+    kind: 'write',
+    description:
+      'Pin a loose idea to a vendor category — a link with a note, for when the couple is still ' +
+      'exploring and has no names yet. Use this when you research options for a category; ' +
+      'add_vendor_candidate is for a business they are actually considering.',
+    input_schema: obj(
+      {
+        vendorId: str('Vendor category id (from get_dashboard section "vendors")'),
+        url: str('Link to the idea'),
+        caption: str('Why it is worth a look'),
+      },
+      ['vendorId']
+    ),
+    summarize: (i) => `Pin an idea to ${label('vendors', i.vendorId, 'type')}`,
+    run: (i) => {
+      requireEntity('vendors', i.vendorId);
+      S().addVendorPin(i.vendorId, { url: i.url || '', caption: i.caption || '' });
+      return `Pinned an idea to "${label('vendors', i.vendorId, 'type')}".`;
+    },
+  },
+  {
+    name: 'add_vendor_candidate',
+    kind: 'write',
+    description:
+      'Add a business to a vendor category\'s shortlist — one of the options being compared.',
+    input_schema: obj(
+      {
+        vendorId: str('Vendor category id (from get_dashboard section "vendors")'),
+        name: str('Business name'),
+        quote: str('Quoted price'),
+        available: enumStr(['Unknown', 'Yes', 'No'], 'Available on the wedding date?'),
+        packageName: str('Package or tier they quoted'),
+        pros: str('What is good about them'),
+        cons: str('What gives you pause'),
+        contact: str('Contact person'),
+        emails: strArr('Their email addresses'),
+        phones: strArr('Their phone numbers'),
+        website: str('https://…'),
+        notes: str('Anything else worth recording'),
+      },
+      ['vendorId', 'name']
+    ),
+    summarize: (i) => `Add "${i.name}" to the ${label('vendors', i.vendorId, 'type')} shortlist`,
+    run: (i) => {
+      requireEntity('vendors', i.vendorId);
+      const { vendorId, ...rest } = i;
+      S().addVendorCandidate(vendorId, {
+        ...clean(rest),
+        emails: toContacts(i.emails),
+        phones: toContacts(i.phones),
+      });
+      return `Added "${i.name}" to the ${label('vendors', vendorId, 'type')} shortlist.`;
+    },
+  },
+  {
+    name: 'update_vendor_candidate',
+    kind: 'write',
+    description:
+      'Update one shortlisted vendor — price, availability, pros and cons, contact details, notes.',
+    input_schema: obj(
+      {
+        vendorId: str('Vendor category id'),
+        candidateId: str('Candidate id (from get_dashboard section "vendors")'),
+        name: str('Business name'),
+        quote: str('Quoted price'),
+        available: enumStr(['Unknown', 'Yes', 'No'], 'Available on the wedding date?'),
+        packageName: str('Package or tier they quoted'),
+        pros: str('What is good about them'),
+        cons: str('What gives you pause'),
+        contact: str('Contact person'),
+        emails: strArr('Their email addresses'),
+        phones: strArr('Their phone numbers'),
+        website: str('https://…'),
+        notes: str('Anything else worth recording'),
+      },
+      ['vendorId', 'candidateId']
+    ),
+    summarize: (i) => `Update ${candidateLabel(i.vendorId, i.candidateId)}`,
+    run: (i) => {
+      const { vendorId, candidateId, emails, phones, ...rest } = i;
+      requireCandidate(vendorId, candidateId);
+      S().updateVendorCandidate(
+        vendorId,
+        candidateId,
+        clean({
+          ...rest,
+          emails: emails === undefined ? undefined : toContacts(emails),
+          phones: phones === undefined ? undefined : toContacts(phones),
+        })
+      );
+      return `Updated ${candidateLabel(vendorId, candidateId)}.`;
+    },
+  },
+  {
+    name: 'book_vendor_candidate',
+    kind: 'write',
+    description:
+      'Mark a shortlisted vendor as the one being booked. Moves the category to Booked and ' +
+      'mirrors the vendor\'s name, contact and price onto the tracker row.',
+    input_schema: obj({ vendorId: str(), candidateId: str() }, ['vendorId', 'candidateId']),
+    summarize: (i) => `Book ${candidateLabel(i.vendorId, i.candidateId)}`,
+    run: (i) => {
+      requireCandidate(i.vendorId, i.candidateId);
+      S().chooseVendorCandidate(i.vendorId, i.candidateId);
+      return `Booked ${candidateLabel(i.vendorId, i.candidateId)}.`;
+    },
+  },
+
   // ---------------------------------------------------------------- seating
   {
     name: 'add_table',
@@ -1230,6 +1340,22 @@ function toLinks(links: unknown): ChecklistLink[] | undefined {
     .map((l: any) => ({ id: 'l_' + uid(), label: String(l.label ?? ''), url: String(l.url).trim() }));
 }
 
+function requireCandidate(vendorId: string, candidateId: string) {
+  const v = S().vendors.find((x) => x.id === vendorId);
+  if (!v) throw new Error(`No vendor category with id "${vendorId}".`);
+  if (!v.candidates.some((c) => c.id === candidateId)) {
+    throw new Error(
+      `No candidate "${candidateId}" under "${v.type}". Call get_dashboard section "vendors".`
+    );
+  }
+}
+
+function candidateLabel(vendorId: string, candidateId: string): string {
+  const v = S().vendors.find((x) => x.id === vendorId);
+  const c = v?.candidates.find((x) => x.id === candidateId);
+  return c ? `"${c.name || 'unnamed candidate'}"` : `"${candidateId}"`;
+}
+
 function requireEntity(key: 'households' | 'budgetCats' | 'vendors' | 'seating' | 'venues' | 'giftTracker' | 'honeymoonDays', id: string) {
   const list = (S() as any)[key] as Array<{ id: string }>;
   if (!list.some((x) => x.id === id)) {
@@ -1347,7 +1473,35 @@ function readSection(section: string): unknown {
         })),
       };
     case 'vendors':
-      return { vendors: s.vendors };
+      return {
+        vendors: s.vendors.map((v) => ({
+          id: v.id,
+          category: v.type,
+          stage: v.stage,
+          notes: v.notes,
+          budgetCatId: v.budgetCatId,
+          chosenId: v.chosenId,
+          booked: v.name,
+          cost: v.cost,
+          ideas: v.pins.map((p) => ({ id: p.id, url: p.url, caption: p.caption })),
+          candidates: v.candidates.map((c) => ({
+            id: c.id,
+            name: c.name,
+            rating: c.rating,
+            quote: c.quote,
+            finalPrice: c.finalPrice,
+            available: c.available,
+            packageName: c.packageName,
+            pros: c.pros,
+            cons: c.cons,
+            contact: c.contact,
+            emails: c.emails,
+            phones: c.phones,
+            website: c.website,
+            notes: c.notes,
+          })),
+        })),
+      };
     case 'seating':
       return {
         tables: s.seating.map((t) => ({

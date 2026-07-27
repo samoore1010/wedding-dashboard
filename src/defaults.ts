@@ -167,18 +167,18 @@ export const DEFAULT_WEEKEND: WeekendEvent[] = [
 ];
 
 export const DEFAULT_VENDORS: Vendor[] = [
-  { id: 'v1', type: 'Planner', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '' },
-  { id: 'v2', type: 'Venue', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '' },
-  { id: 'v3', type: 'Caterer', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '' },
-  { id: 'v4', type: 'Photographer', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '' },
-  { id: 'v5', type: 'Videographer', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '' },
-  { id: 'v6', type: 'Florist', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '' },
-  { id: 'v7', type: 'DJ / Band', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '' },
-  { id: 'v8', type: 'Hair & Makeup', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '' },
-  { id: 'v9', type: 'Officiant', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '' },
-  { id: 'v10', type: 'Baker / Cake', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '' },
-  { id: 'v11', type: 'Transportation', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '' },
-  { id: 'v12', type: 'Rentals', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '' },
+  { id: 'v1', type: 'Planner', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '', pins: [], candidates: [], chosenId: '', budgetCatId: '' },
+  { id: 'v2', type: 'Venue', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '', pins: [], candidates: [], chosenId: '', budgetCatId: '' },
+  { id: 'v3', type: 'Caterer', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '', pins: [], candidates: [], chosenId: '', budgetCatId: '' },
+  { id: 'v4', type: 'Photographer', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '', pins: [], candidates: [], chosenId: '', budgetCatId: '' },
+  { id: 'v5', type: 'Videographer', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '', pins: [], candidates: [], chosenId: '', budgetCatId: '' },
+  { id: 'v6', type: 'Florist', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '', pins: [], candidates: [], chosenId: '', budgetCatId: '' },
+  { id: 'v7', type: 'DJ / Band', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '', pins: [], candidates: [], chosenId: '', budgetCatId: '' },
+  { id: 'v8', type: 'Hair & Makeup', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '', pins: [], candidates: [], chosenId: '', budgetCatId: '' },
+  { id: 'v9', type: 'Officiant', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '', pins: [], candidates: [], chosenId: '', budgetCatId: '' },
+  { id: 'v10', type: 'Baker / Cake', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '', pins: [], candidates: [], chosenId: '', budgetCatId: '' },
+  { id: 'v11', type: 'Transportation', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '', pins: [], candidates: [], chosenId: '', budgetCatId: '' },
+  { id: 'v12', type: 'Rentals', name: '', contact: '', phone: '', email: '', stage: 'Not Started', cost: '', notes: '', pins: [], candidates: [], chosenId: '', budgetCatId: '' },
 ];
 
 export const DEFAULT_SEATING: SeatingTable[] = [
