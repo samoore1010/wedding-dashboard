@@ -37,12 +37,12 @@ export function useEditSession<T extends object>(
   const start = useCallback(() => setDraft(structuredClone(value)), [value]);
   const cancel = useCallback(() => setDraft(null), []);
 
+  // Save outside the state updater: React may run an updater during a render
+  // pass, and writing to the store from there updates other components mid-render.
   const save = useCallback(() => {
-    setDraft((d) => {
-      if (d) onSave(d);
-      return null;
-    });
-  }, [onSave]);
+    if (draft) onSave(draft);
+    setDraft(null);
+  }, [draft, onSave]);
 
   const set = useCallback(
     (patch: Partial<T>) => setDraft((d) => (d ? { ...d, ...patch } : d)),

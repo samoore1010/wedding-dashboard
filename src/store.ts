@@ -13,6 +13,8 @@ import type {
   RunOfShowItem,
   SeatingTable,
   Vendor,
+  VendorCandidate,
+  VendorPin,
   Venue,
   VenueField,
   VenueHotel,
@@ -27,6 +29,7 @@ import type {
 } from './types';
 import { DEFAULT_STATE } from './defaults';
 import { defaultVenuePlan, makeVenueField, makeVenueHotel, makeVenueSection } from './venuePlan';
+import { headlineFrom, makeVendorCandidate, makeVendorPin } from './vendors';
 import { defaultWeddingParty, makePartyGroup, makePartyMember } from './weddingParty';
 import { uid } from './utils';
 import { cleanContacts, toContacts } from './guests/contacts';
@@ -135,6 +138,21 @@ interface Actions {
   addVendor: (v?: Partial<Vendor>) => void;
   updateVendor: (id: string, patch: Partial<Vendor>) => void;
   removeVendor: (id: string) => void;
+  /** Ideas pinned to a category while exploring. */
+  addVendorPin: (vendorId: string, pin?: Partial<VendorPin>) => void;
+  updateVendorPin: (vendorId: string, pinId: string, patch: Partial<VendorPin>) => void;
+  removeVendorPin: (vendorId: string, pinId: string) => void;
+  /** Turn a pin into a real candidate, carrying its image, link and caption. */
+  promoteVendorPin: (vendorId: string, pinId: string) => void;
+  addVendorCandidate: (vendorId: string, candidate?: Partial<VendorCandidate>) => string;
+  updateVendorCandidate: (
+    vendorId: string,
+    candidateId: string,
+    patch: Partial<VendorCandidate>
+  ) => void;
+  removeVendorCandidate: (vendorId: string, candidateId: string) => void;
+  /** Book a candidate: marks it chosen, moves the category to Booked. */
+  chooseVendorCandidate: (vendorId: string, candidateId: string) => void;
 
   // Seating
   addTable: (t?: Partial<SeatingTable>) => void;
@@ -441,6 +459,10 @@ export const useStore = create<AppState & Actions & UndoState>()(
               stage: 'Not Started',
               cost: '',
               notes: '',
+              pins: [],
+              candidates: [],
+              chosenId: '',
+              budgetCatId: '',
               ...v,
             },
           ],
@@ -451,6 +473,97 @@ export const useStore = create<AppState & Actions & UndoState>()(
         })),
       removeVendor: (id) =>
         set((s) => ({ vendors: s.vendors.filter((v) => v.id !== id) })),
+
+      addVendorPin: (vendorId, pin) =>
+        set((s) => ({
+          vendors: s.vendors.map((v) =>
+            v.id === vendorId ? { ...v, pins: [...v.pins, makeVendorPin(pin)] } : v
+          ),
+        })),
+      updateVendorPin: (vendorId, pinId, patch) =>
+        set((s) => ({
+          vendors: s.vendors.map((v) =>
+            v.id === vendorId
+              ? { ...v, pins: v.pins.map((p) => (p.id === pinId ? { ...p, ...patch } : p)) }
+              : v
+          ),
+        })),
+      removeVendorPin: (vendorId, pinId) =>
+        set((s) => ({
+          vendors: s.vendors.map((v) =>
+            v.id === vendorId ? { ...v, pins: v.pins.filter((p) => p.id !== pinId) } : v
+          ),
+        })),
+      promoteVendorPin: (vendorId, pinId) =>
+        set((s) => ({
+          vendors: s.vendors.map((v) => {
+            if (v.id !== vendorId) return v;
+            const pin = v.pins.find((p) => p.id === pinId);
+            if (!pin) return v;
+            const candidate = makeVendorCandidate({
+              name: pin.caption.trim(),
+              image: pin.image,
+              website: pin.url,
+              notes: pin.image && pin.caption ? '' : pin.caption,
+            });
+            return {
+              ...v,
+              pins: v.pins.filter((p) => p.id !== pinId),
+              candidates: [...v.candidates, candidate],
+            };
+          }),
+        })),
+
+      addVendorCandidate: (vendorId, candidate) => {
+        const made = makeVendorCandidate(candidate);
+        set((s) => ({
+          vendors: s.vendors.map((v) =>
+            v.id === vendorId ? { ...v, candidates: [...v.candidates, made] } : v
+          ),
+        }));
+        return made.id;
+      },
+      updateVendorCandidate: (vendorId, candidateId, patch) =>
+        set((s) => ({
+          vendors: s.vendors.map((v) => {
+            if (v.id !== vendorId) return v;
+            const next = {
+              ...v,
+              candidates: v.candidates.map((c) =>
+                c.id === candidateId ? { ...c, ...patch } : c
+              ),
+            };
+            // Editing the booked vendor keeps the tracker row in step.
+            return candidateId === v.chosenId ? { ...next, ...headlineFrom(next) } : next;
+          }),
+        })),
+      removeVendorCandidate: (vendorId, candidateId) =>
+        set((s) => ({
+          vendors: s.vendors.map((v) => {
+            if (v.id !== vendorId) return v;
+            const next = {
+              ...v,
+              candidates: v.candidates.filter((c) => c.id !== candidateId),
+              chosenId: v.chosenId === candidateId ? '' : v.chosenId,
+            };
+            return { ...next, ...headlineFrom(next) };
+          }),
+        })),
+      chooseVendorCandidate: (vendorId, candidateId) =>
+        set((s) => ({
+          vendors: s.vendors.map((v) => {
+            if (v.id !== vendorId) return v;
+            // Un-booking leaves the stage alone — you may still be negotiating.
+            const chosenId = v.chosenId === candidateId ? '' : candidateId;
+            const next = {
+              ...v,
+              chosenId,
+              stage:
+                chosenId && v.stage !== 'Paid in Full' ? ('Booked' as const) : v.stage,
+            };
+            return { ...next, ...headlineFrom(next) };
+          }),
+        })),
 
       addTable: (t) =>
         set((s) => ({
@@ -891,7 +1004,7 @@ export const useStore = create<AppState & Actions & UndoState>()(
     }),
     {
       name: 'wedding-dashboard-v1',
-      version: 11,
+      version: 12,
       // Undo history is session-only — never sync it to the server/localStorage.
       partialize: (s) => {
         const { undoStack: _u, ...rest } = s as any;
@@ -1031,6 +1144,31 @@ export const useStore = create<AppState & Actions & UndoState>()(
               })),
             ])
           );
+        }
+        // v12: vendor rows became category hubs — ideas, candidates, a chosen
+        // one. Anything already filled in becomes that category's booked vendor.
+        if (version < 12) {
+          persisted.vendors = (persisted.vendors ?? []).map((v: any) => {
+            const base = {
+              ...v,
+              pins: v.pins ?? [],
+              candidates: v.candidates ?? [],
+              chosenId: v.chosenId ?? '',
+              budgetCatId: v.budgetCatId ?? '',
+            };
+            // A row with a name is a vendor you already picked — it becomes
+            // that category's booked candidate. Category notes stay put.
+            if (base.candidates.length || !String(v.name ?? '').trim()) return base;
+            const candidate = makeVendorCandidate({
+              name: v.name,
+              contact: v.contact ?? '',
+              emails: v.email ? [v.email] : [],
+              phones: v.phone ? [v.phone] : [],
+              quote: v.cost ?? '',
+              finalPrice: v.stage === 'Booked' || v.stage === 'Paid in Full' ? v.cost ?? '' : '',
+            });
+            return { ...base, candidates: [candidate], chosenId: candidate.id };
+          });
         }
         return persisted;
       },

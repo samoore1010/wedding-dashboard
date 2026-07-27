@@ -10,7 +10,12 @@ import { EditableSelect } from '../components/ui/EditableSelect';
 import { IconButton } from '../components/ui/IconButton';
 import { confirmAction } from '../components/ui/ConfirmDialog';
 import { cn } from '../utils';
+import { vendorProgress } from '../vendors';
+import { VendorDetail } from './vendors/VendorDetail';
 import type { VendorStage } from '../types';
+
+/** Placeholder for an empty read-only cell. */
+const Dash = () => <span className="text-muted/60">—</span>;
 
 const STAGES: VendorStage[] = [
   'Not Started',
@@ -30,6 +35,7 @@ const stageColor = (s: VendorStage) =>
     : 'text-warning';
 
 export function Vendors() {
+  const [openId, setOpenId] = useState<string | null>(null);
   const { vendors, addVendor, updateVendor, removeVendor } = useShallowStore((s) => ({
     vendors: s.vendors,
     addVendor: s.addVendor,
@@ -45,9 +51,14 @@ export function Vendors() {
       v.type.toLowerCase().includes(q) ||
       v.name.toLowerCase().includes(q) ||
       v.contact.toLowerCase().includes(q) ||
-      v.notes.toLowerCase().includes(q)
+      v.notes.toLowerCase().includes(q) ||
+      v.candidates.some((c) => c.name.toLowerCase().includes(q))
     );
   });
+
+  if (openId && vendors.some((v) => v.id === openId)) {
+    return <VendorDetail vendorId={openId} onBack={() => setOpenId(null)} />;
+  }
 
   const booked = vendors.filter((v) => v.stage === 'Booked' || v.stage === 'Paid in Full').length;
   const inProg = vendors.filter(
@@ -67,7 +78,7 @@ export function Vendors() {
         title="Vendor Tracker"
         action={
           <Button icon={<Plus size={14} />} size="sm" onClick={() => addVendor()}>
-            Add Vendor
+            Add Category
           </Button>
         }
       >
@@ -85,8 +96,8 @@ export function Vendors() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wider text-muted border-b border-border">
-                <th className="px-2 py-2">Type</th>
-                <th className="px-2 py-2">Vendor</th>
+                <th className="px-2 py-2">Category</th>
+                <th className="px-2 py-2">Booked vendor</th>
                 <th className="px-2 py-2">Contact</th>
                 <th className="px-2 py-2">Phone</th>
                 <th className="px-2 py-2">Email</th>
@@ -99,44 +110,22 @@ export function Vendors() {
             <tbody className="divide-y divide-border">
               {filtered.map((v) => (
                 <tr key={v.id} className="hover:bg-bg/40">
-                  <td className="px-2 py-1.5 min-w-[120px]">
-                    <EditableText
-                      value={v.type}
-                      onChange={(val) => updateVendor(v.id, { type: val })}
-                      placeholder="Type"
-                      className="font-semibold"
-                    />
+                  <td className="px-2 py-1.5 min-w-[150px]">
+                    {/* The category name, its progress, and the way in. */}
+                    <button onClick={() => setOpenId(v.id)} className="text-left group/open">
+                      <span className="font-semibold text-ink group-hover/open:text-accent transition-colors">
+                        {v.type || 'Untitled'}
+                      </span>
+                      {vendorProgress(v) && !v.chosenId && (
+                        <span className="block text-[11px] text-muted">{vendorProgress(v)}</span>
+                      )}
+                    </button>
                   </td>
-                  <td className="px-2 py-1.5 min-w-[120px]">
-                    <EditableText
-                      value={v.name}
-                      onChange={(val) => updateVendor(v.id, { name: val })}
-                      placeholder="—"
-                    />
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <EditableText
-                      value={v.contact}
-                      onChange={(val) => updateVendor(v.id, { contact: val })}
-                      placeholder="—"
-                      className="text-xs"
-                    />
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <EditableText
-                      value={v.phone}
-                      onChange={(val) => updateVendor(v.id, { phone: val })}
-                      placeholder="—"
-                      className="text-xs"
-                    />
-                  </td>
-                  <td className="px-2 py-1.5 min-w-[140px]">
-                    <EditableText
-                      value={v.email}
-                      onChange={(val) => updateVendor(v.id, { email: val })}
-                      placeholder="—"
-                      className="text-xs"
-                    />
+                  <td className="px-2 py-1.5 min-w-[120px] text-ink">{v.name || <Dash />}</td>
+                  <td className="px-2 py-1.5 text-xs text-ink">{v.contact || <Dash />}</td>
+                  <td className="px-2 py-1.5 text-xs text-ink tabular-nums">{v.phone || <Dash />}</td>
+                  <td className="px-2 py-1.5 min-w-[140px] text-xs text-ink break-all">
+                    {v.email || <Dash />}
                   </td>
                   <td className="px-2 py-1.5">
                     <EditableSelect
@@ -148,16 +137,8 @@ export function Vendors() {
                       displayClassName={cn('font-semibold', stageColor(v.stage))}
                     />
                   </td>
-                  <td className="px-2 py-1.5 text-right">
-                    <EditableText
-                      value={v.cost || ''}
-                      numeric
-                      align="right"
-                      placeholder="$0"
-                      ariaLabel={`cost for ${v.name || v.type}`}
-                      className="text-xs"
-                      onChange={(next) => updateVendor(v.id, { cost: next })}
-                    />
+                  <td className="px-2 py-1.5 text-right text-xs text-ink tabular-nums">
+                    {v.cost || <Dash />}
                   </td>
                   <td className="px-2 py-1.5 min-w-[120px]">
                     <EditableText
@@ -167,7 +148,13 @@ export function Vendors() {
                       className="text-xs"
                     />
                   </td>
-                  <td className="px-2 py-1.5 text-right">
+                  <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                    <button
+                      onClick={() => setOpenId(v.id)}
+                      className="text-xs font-semibold text-primary hover:text-accent mr-1"
+                    >
+                      Open
+                    </button>
                     <IconButton
                       tone="danger"
                       onClick={async () => {
