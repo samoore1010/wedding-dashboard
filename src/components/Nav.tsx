@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { TabId } from '../types';
 import { useShallowStore } from '../store';
+import { useViewer } from '../viewer';
 import { cn, pct } from '../utils';
 
 interface NavProps {
@@ -43,8 +44,10 @@ const TABS: { id: TabId; label: string; icon: any }[] = [
 ];
 
 export function Nav({ active, onChange, mobileOpen, onMobileClose }: NavProps) {
-  const { households, party, vendors, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard } =
+  const viewer = useViewer((s) => s.viewer);
+  const { households, party, vendors, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard, reviewRequests } =
     useShallowStore((s) => ({
+      reviewRequests: s.reviewRequests,
       households: s.households,
       party: s.weddingParty,
       vendors: s.vendors,
@@ -72,8 +75,13 @@ export function Nav({ active, onChange, mobileOpen, onMobileClose }: NavProps) {
     const totalReg = Object.values(registryCats).reduce((s, items) => s + items.length, 0);
     const purchasedReg = Object.values(registryChecked).filter(Boolean).length;
     const giftsToThank = gifts.length - gifts.filter((g) => g.thankYou).length;
+    // Call-outs waiting on you — the overview is where they're answered.
+    const myReviews = reviewRequests.filter(
+      (r) => r.status === 'open' && (!viewer || r.to === viewer)
+    ).length;
 
     return {
+      overview: myReviews || null,
       guests: guestCount || null,
       weddingparty: party.members.length || null,
       moodboard: moodBoard.length || null,
@@ -82,7 +90,7 @@ export function Nav({ active, onChange, mobileOpen, onMobileClose }: NavProps) {
       registry: totalReg ? `${purchasedReg}/${totalReg}` : null,
       gifts: giftsToThank > 0 ? giftsToThank : null,
     } as Record<string, string | number | null>;
-  }, [households, party, vendors, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard]);
+  }, [households, party, vendors, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard, reviewRequests, viewer]);
 
   // close mobile drawer when tab changes via Escape
   useEffect(() => {

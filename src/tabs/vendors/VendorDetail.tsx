@@ -23,6 +23,9 @@ import { EditableSelect } from '../../components/ui/EditableSelect';
 import { useEditSession } from '../../components/ui/useEditSession';
 import { confirmAction } from '../../components/ui/ConfirmDialog';
 import { IconButton } from '../../components/ui/IconButton';
+import { AskReviewButton } from '../../components/reviews/ReviewPanel';
+import { ReviewRow } from '../../components/reviews/ReviewRow';
+import { requestsForTarget, vendorTarget } from '../../reviews';
 import { uploadImage } from '../../images';
 import { cn, fmtMoney, uid } from '../../utils';
 import { toContacts } from '../../guests/contacts';
@@ -70,6 +73,9 @@ export function VendorDetail({ vendorId, onBack }: { vendorId: string; onBack: (
     chooseVendorCandidate: st.chooseVendorCandidate,
   }));
   const v = s.vendor;
+  const reviews = useShallowStore((st) =>
+    requestsForTarget(st.reviewRequests, vendorTarget(vendorId))
+  );
 
   const [compare, setCompare] = useState(false);
   const [openCandidate, setOpenCandidate] = useState<string | null>(null);
@@ -89,19 +95,32 @@ export function VendorDetail({ vendorId, onBack }: { vendorId: string; onBack: (
         >
           <ArrowLeft size={15} /> Back to vendors
         </button>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold text-muted">Stage</span>
-          <div className="w-44">
-            <EditableSelect
-              value={v.stage}
-              options={STAGES}
-              ariaLabel="stage"
-              onChange={(next) => s.updateVendor(v.id, { stage: next as VendorStage })}
-              className="text-xs"
-            />
+        <div className="flex items-center gap-3 flex-wrap">
+          <AskReviewButton target={vendorTarget(v.id)} title={v.type || 'Vendor category'} />
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-muted">Stage</span>
+            <div className="w-44">
+              <EditableSelect
+                value={v.stage}
+                options={STAGES}
+                ariaLabel="stage"
+                onChange={(next) => s.updateVendor(v.id, { stage: next as VendorStage })}
+                className="text-xs"
+              />
+            </div>
           </div>
         </div>
       </div>
+
+      {reviews.length > 0 && (
+        <Card title="Review">
+          <div className="space-y-2">
+            {reviews.map((r) => (
+              <ReviewRow key={r.id} request={r} />
+            ))}
+          </div>
+        </Card>
+      )}
 
       <CategoryPanel
         vendor={v}

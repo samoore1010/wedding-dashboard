@@ -1,6 +1,16 @@
 import { useState } from 'react';
-import { Plus, Trash2, ChevronDown, FolderPlus, StickyNote, Link2, CalendarDays } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  ChevronDown,
+  FolderPlus,
+  StickyNote,
+  Link2,
+  CalendarDays,
+  UserCheck,
+} from 'lucide-react';
 import { useShallowStore } from '../store';
+import { useFocusTarget } from '../navigation';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Field';
@@ -22,9 +32,11 @@ export function Checklist() {
     removeCheckItem,
     addPhase,
     removePhase,
+    reviewRequests,
   } = useShallowStore((s) => ({
     checklistItems: s.checklistItems,
     checklist: s.checklist,
+    reviewRequests: s.reviewRequests,
     toggleCheck: s.toggleCheck,
     addCheckItem: s.addCheckItem,
     updateCheckItem: s.updateCheckItem,
@@ -40,6 +52,19 @@ export function Checklist() {
   const [phaseName, setPhaseName] = useState('');
   /** Which task has its own page open, if any. */
   const [openItem, setOpenItem] = useState<{ phase: string; id: string } | null>(null);
+
+  // Arriving from a call-out on the overview: open the task it points at.
+  useFocusTarget('checklist', (ref) => {
+    setOpenItem({ phase: ref.phase, id: ref.itemId });
+    setOpen((o) => ({ ...o, [ref.phase]: true }));
+  });
+
+  /** Tasks with someone waiting to review them. */
+  const awaitingReview = new Set(
+    reviewRequests
+      .filter((r) => r.status === 'open' && r.target.kind === 'checklist')
+      .map((r) => r.target.ref.itemId)
+  );
 
   const detail = openItem
     ? (checklistItems[openItem.phase] ?? []).find((it) => it.id === openItem.id)
@@ -167,7 +192,7 @@ export function Checklist() {
                           >
                             {it.text || 'Untitled task'}
                           </span>
-                          <ItemMarkers item={it} />
+                          <ItemMarkers item={it} awaitingReview={awaitingReview.has(it.id)} />
                         </button>
                         <IconButton
                           tone="danger"
@@ -242,12 +267,17 @@ export function Checklist() {
 }
 
 /** Small hints that a task has detail worth opening. */
-function ItemMarkers({ item }: { item: ChecklistItem }) {
+function ItemMarkers({ item, awaitingReview }: { item: ChecklistItem; awaitingReview?: boolean }) {
   const links = item.links?.length ?? 0;
   const hasNotes = !!item.notes?.trim();
-  if (!hasNotes && !links && !item.due) return null;
+  if (!hasNotes && !links && !item.due && !awaitingReview) return null;
   return (
     <span className="ml-2 inline-flex items-center gap-2 align-middle text-[10px] text-muted">
+      {awaitingReview && (
+        <span className="inline-flex items-center gap-0.5 text-accent font-semibold">
+          <UserCheck size={10} /> Review
+        </span>
+      )}
       {item.due && (
         <span className="inline-flex items-center gap-0.5">
           <CalendarDays size={10} /> {item.due}
