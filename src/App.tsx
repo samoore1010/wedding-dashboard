@@ -13,6 +13,7 @@ import { Overview } from './tabs/Overview';
 import { Budget } from './tabs/Budget';
 import { Guests } from './tabs/Guests';
 import { WeddingParty } from './tabs/WeddingParty';
+import { BachParty } from './tabs/BachParty';
 import { Venues } from './tabs/Venues';
 import { MoodBoard } from './tabs/MoodBoard';
 import { Checklist } from './tabs/Checklist';
@@ -53,6 +54,7 @@ function App() {
           {activeTab === 'budget' && <Budget />}
           {activeTab === 'guests' && <Guests />}
           {activeTab === 'weddingparty' && <WeddingParty />}
+          {activeTab === 'bachparty' && <BachParty />}
           {activeTab === 'venues' && <Venues />}
           {activeTab === 'moodboard' && <MoodBoard />}
           {activeTab === 'checklist' && <Checklist />}

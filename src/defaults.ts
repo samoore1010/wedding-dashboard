@@ -9,6 +9,7 @@ import type {
 } from './types';
 import { defaultVenuePlan } from './venuePlan';
 import { defaultWeddingParty } from './weddingParty';
+import { defaultBachParty } from './bachParty';
 
 export const COLORS = [
   '#D4A0A0',
@@ -308,16 +309,18 @@ export const DEFAULT_HONEYMOON_DAYS: HoneymoonDay[] = [
   { id: 'h6', day: 6, title: 'Travel Home', desc: 'Head back as newlyweds!' },
 ];
 
+export const DEFAULT_SETTINGS: AppState['settings'] = {
+  brideName: 'Drew',
+  groomName: 'Steven',
+  weddingDate: '2026-03-12',
+  weddingTime: '16:00',
+  venueName: '',
+  theme: 'sage',
+  currency: '$',
+};
+
 export const DEFAULT_STATE: AppState = {
-  settings: {
-    brideName: 'Drew',
-    groomName: 'Steven',
-    weddingDate: '2026-03-12',
-    weddingTime: '16:00',
-    venueName: '',
-    theme: 'sage',
-    currency: '$',
-  },
+  settings: DEFAULT_SETTINGS,
   budgetTotal: 35000,
   budgetCats: DEFAULT_BUDGET_CATS,
   budgetSpent: {},
@@ -344,6 +347,7 @@ export const DEFAULT_STATE: AppState = {
   venues: [],
   venuePlan: defaultVenuePlan(),
   weddingParty: defaultWeddingParty(),
+  bachParty: defaultBachParty(DEFAULT_SETTINGS),
   honeymoonDays: DEFAULT_HONEYMOON_DAYS,
   notes: '',
   honeymoonNotes: '',
