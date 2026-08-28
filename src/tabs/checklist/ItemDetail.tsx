@@ -1,10 +1,12 @@
-import { ArrowLeft, Trash2, Plus, X, ExternalLink, CalendarDays, Link2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, X, ExternalLink, CalendarDays, Link2, UserCheck } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input, Textarea } from '../../components/ui/Field';
 import { EditControls } from '../../components/ui/EditControls';
 import { useEditSession } from '../../components/ui/useEditSession';
 import { confirmAction } from '../../components/ui/ConfirmDialog';
+import { ReviewPanel } from '../../components/reviews/ReviewPanel';
+import { checklistTarget } from '../../reviews';
 import type { ChecklistItem, ChecklistLink } from '../../types';
 import { cn, uid } from '../../utils';
 
@@ -195,6 +197,14 @@ export function ItemDetail({
         ) : (
           <p className="text-sm text-muted/70">No links yet.</p>
         )}
+      </Card>
+
+      <Card>
+        <SectionTitle icon={<UserCheck size={13} />} title="Review" />
+        <ReviewPanel
+          target={checklistTarget(phase, item.id)}
+          title={item.text || 'Untitled task'}
+        />
       </Card>
 
       <div>

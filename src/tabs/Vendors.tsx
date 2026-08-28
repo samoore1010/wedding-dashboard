@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Trash2, Search } from 'lucide-react';
 import { useShallowStore } from '../store';
+import { useFocusTarget } from '../navigation';
 import { Card } from '../components/ui/Card';
 import { StatCard } from '../components/ui/StatCard';
 import { Button } from '../components/ui/Button';
@@ -36,6 +37,8 @@ const stageColor = (s: VendorStage) =>
 
 export function Vendors() {
   const [openId, setOpenId] = useState<string | null>(null);
+  // Arriving from a call-out on the overview: open the category it points at.
+  useFocusTarget('vendor', (ref) => setOpenId(ref.vendorId));
   const { vendors, addVendor, updateVendor, removeVendor } = useShallowStore((s) => ({
     vendors: s.vendors,
     addVendor: s.addVendor,

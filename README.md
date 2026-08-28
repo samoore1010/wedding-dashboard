@@ -4,6 +4,17 @@ A single-wedding planning dashboard — guests, budget, vendors, seating, venues
 registry, gifts, honeymoon, timeline, and an **AI planning assistant** that can
 read and edit the whole dashboard by chat.
 
+## Review call-outs
+
+Both partners work on the dashboard independently, so either of them can hand
+something over: **Ask … to review** on a checklist task or a vendor category —
+or a free-standing call-out from the overview — puts it on the other person's
+**Review Call-Outs** widget until they open it and mark it reviewed, with a
+reply.
+
+Who you are is stored per browser (Customize → This Device), not in the shared
+wedding data, so each of you sees your own inbox on the same dashboard.
+
 ## Running
 
 ```sh

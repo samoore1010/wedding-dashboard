@@ -5,7 +5,7 @@ import { StatCard } from '../components/ui/StatCard';
 import { ProgressBar } from '../components/ui/ProgressBar';
 import { Badge } from '../components/ui/Badge';
 import { BudgetDonut } from '../components/charts/BudgetDonut';
-import { GuestDonut } from '../components/charts/GuestDonut';
+import { ReviewCallouts } from '../components/reviews/ReviewCallouts';
 import { fmtMoney, pct } from '../utils';
 import type { TabId, VendorStage } from '../types';
 
@@ -37,8 +37,6 @@ export function Overview({ onJump }: OverviewProps) {
   const members = households.filter((h) => (h.list ?? 'Invited') === 'Invited').flatMap((h) => h.members);
   const total = members.length;
   const yes = members.filter((m) => m.rsvp === 'Yes').length;
-  const waiting = members.filter((m) => m.rsvp === 'Waiting').length;
-  const no = members.filter((m) => m.rsvp === 'No').length;
 
   let totalChecks = 0;
   let doneChecks = 0;
@@ -100,32 +98,7 @@ export function Overview({ onJump }: OverviewProps) {
           </div>
         </Card>
 
-        <Card
-          title="Guest Breakdown"
-          action={
-            <button onClick={() => onJump('guests')} className="text-xs text-accent hover:underline">
-              View details →
-            </button>
-          }
-        >
-          <div className="h-56">
-            <GuestDonut yes={yes} waiting={waiting} no={no} />
-          </div>
-          <div className="flex justify-around text-sm mt-3">
-            <div>
-              <span className="text-sage font-bold">{yes}</span>{' '}
-              <span className="text-muted">Confirmed</span>
-            </div>
-            <div>
-              <span className="text-warning font-bold">{waiting}</span>{' '}
-              <span className="text-muted">Waiting</span>
-            </div>
-            <div>
-              <span className="text-danger font-bold">{no}</span>{' '}
-              <span className="text-muted">Declined</span>
-            </div>
-          </div>
-        </Card>
+        <ReviewCallouts onJump={onJump} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">
