@@ -30,8 +30,11 @@ import type {
   BudgetCategory,
   ChecklistItem,
   GuestStatus,
+  ReviewRequest,
+  ReviewTarget,
 } from './types';
 import { DEFAULT_STATE } from './defaults';
+import { makeReviewRequest, sameTarget } from './reviews';
 import { defaultVenuePlan, makeVenueField, makeVenueHotel, makeVenueSection } from './venuePlan';
 import { headlineFrom, makeVendorCandidate, makeVendorPin } from './vendors';
 import { defaultWeddingParty, makePartyGroup, makePartyMember } from './weddingParty';
@@ -75,6 +78,7 @@ const UNDO_DATA_KEYS = [
   'checklist',
   'checklistItems',
   'vendors',
+  'reviewRequests',
   'seating',
   'runOfShow',
   'weekend',
@@ -164,6 +168,15 @@ interface Actions {
   removeVendorCandidate: (vendorId: string, candidateId: string) => void;
   /** Book a candidate: marks it chosen, moves the category to Booked. */
   chooseVendorCandidate: (vendorId: string, candidateId: string) => void;
+
+  // Review call-outs (one partner asking the other to look at something)
+  addReviewRequest: (r?: Partial<ReviewRequest>) => string;
+  updateReviewRequest: (id: string, patch: Partial<ReviewRequest>) => void;
+  /** Mark reviewed (with an optional reply), or reopen it. */
+  resolveReview: (id: string, done: boolean, reply?: string) => void;
+  removeReviewRequest: (id: string) => void;
+  /** Drop every call-out pointing at one record — used when it's deleted. */
+  clearReviewsForTarget: (target: ReviewTarget) => void;
 
   // Seating
   addTable: (t?: Partial<SeatingTable>) => void;
@@ -458,6 +471,10 @@ export const useStore = create<AppState & Actions & UndoState>()(
             ...s.checklistItems,
             [phase]: (s.checklistItems[phase] || []).filter((it) => it.id !== id),
           },
+          // A call-out pointing at a deleted task would be a dead link.
+          reviewRequests: s.reviewRequests.filter(
+            (r) => !(r.target.kind === 'checklist' && r.target.ref.itemId === id)
+          ),
         })),
       addPhase: (name) =>
         set((s) => ({
@@ -467,7 +484,13 @@ export const useStore = create<AppState & Actions & UndoState>()(
         set((s) => {
           const next = { ...s.checklistItems };
           delete next[name];
-          return { checklistItems: next };
+          const gone = new Set((s.checklistItems[name] ?? []).map((it) => it.id));
+          return {
+            checklistItems: next,
+            reviewRequests: s.reviewRequests.filter(
+              (r) => !(r.target.kind === 'checklist' && gone.has(r.target.ref.itemId))
+            ),
+          };
         }),
 
       addVendor: (v) =>
@@ -497,7 +520,12 @@ export const useStore = create<AppState & Actions & UndoState>()(
           vendors: s.vendors.map((v) => (v.id === id ? { ...v, ...patch } : v)),
         })),
       removeVendor: (id) =>
-        set((s) => ({ vendors: s.vendors.filter((v) => v.id !== id) })),
+        set((s) => ({
+          vendors: s.vendors.filter((v) => v.id !== id),
+          reviewRequests: s.reviewRequests.filter(
+            (r) => !(r.target.kind === 'vendor' && r.target.ref.vendorId === id)
+          ),
+        })),
 
       addVendorPin: (vendorId, pin) =>
         set((s) => ({
@@ -588,6 +616,35 @@ export const useStore = create<AppState & Actions & UndoState>()(
             };
             return { ...next, ...headlineFrom(next) };
           }),
+        })),
+
+      addReviewRequest: (r) => {
+        const made = makeReviewRequest(r);
+        set((s) => ({ reviewRequests: [...s.reviewRequests, made] }));
+        return made.id;
+      },
+      updateReviewRequest: (id, patch) =>
+        set((s) => ({
+          reviewRequests: s.reviewRequests.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+        })),
+      resolveReview: (id, done, reply) =>
+        set((s) => ({
+          reviewRequests: s.reviewRequests.map((r) =>
+            r.id === id
+              ? {
+                  ...r,
+                  status: done ? 'done' : 'open',
+                  reply: reply !== undefined ? reply : r.reply,
+                  resolvedAt: done ? Date.now() : 0,
+                }
+              : r
+          ),
+        })),
+      removeReviewRequest: (id) =>
+        set((s) => ({ reviewRequests: s.reviewRequests.filter((r) => r.id !== id) })),
+      clearReviewsForTarget: (target) =>
+        set((s) => ({
+          reviewRequests: s.reviewRequests.filter((r) => !sameTarget(r.target, target)),
         })),
 
       addTable: (t) =>
@@ -1135,12 +1192,14 @@ export const useStore = create<AppState & Actions & UndoState>()(
 
       setNotes: (s2) => set({ notes: s2 }),
 
-      importState: (s2) => set(s2),
+      // Backups taken before a field existed simply don't carry it, so fill
+      // any gaps from the defaults rather than setting it to undefined.
+      importState: (s2) => set({ ...DEFAULT_STATE, ...s2 }),
       resetState: () => set(DEFAULT_STATE),
     }),
     {
       name: 'wedding-dashboard-v1',
-      version: 13,
+      version: 14,
       // Undo history is session-only — never sync it to the server/localStorage.
       partialize: (s) => {
         const { undoStack: _u, ...rest } = s as any;
@@ -1306,8 +1365,12 @@ export const useStore = create<AppState & Actions & UndoState>()(
             return { ...base, candidates: [candidate], chosenId: candidate.id };
           });
         }
-        // v13: the bach party got its own tab. Seed it, titled from the groom.
-        if (version < 13 && !persisted.bachParty) {
+        // v13: the couple can hand items to each other to review.
+        if (version < 13) {
+          persisted.reviewRequests = persisted.reviewRequests ?? [];
+        }
+        // v14: the bach party got its own tab. Seed it, titled from the groom.
+        if (version < 14 && !persisted.bachParty) {
           persisted.bachParty = defaultBachParty(persisted.settings);
         }
         return persisted;

@@ -6,6 +6,7 @@ import { Input, LabeledField } from './ui/Field';
 import { confirmAction } from './ui/ConfirmDialog';
 import { EditControls } from './ui/EditControls';
 import { useEditSession } from './ui/useEditSession';
+import { ViewerPicker } from './reviews/ViewerPicker';
 import { downloadJson, cn } from '../utils';
 import { DEFAULT_STATE } from '../defaults';
 import type { ThemeId } from '../types';
@@ -221,6 +222,13 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                 className="w-24"
               />
             </LabeledField>
+          </Section>
+
+          <Section
+            title="This Device"
+            hint="You both share one dashboard — this is just so review call-outs know who's looking."
+          >
+            <ViewerPicker label="Signed in as" />
           </Section>
 
           {/* Theme */}

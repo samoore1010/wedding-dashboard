@@ -333,6 +333,7 @@ export const DEFAULT_STATE: AppState = {
     ])
   ),
   vendors: DEFAULT_VENDORS,
+  reviewRequests: [],
   seating: DEFAULT_SEATING,
   runOfShow: DEFAULT_RUN_OF_SHOW,
   weekend: DEFAULT_WEEKEND,

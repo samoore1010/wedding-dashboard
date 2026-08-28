@@ -188,6 +188,55 @@ export interface ChecklistItem {
   due: string;
 }
 
+// ---- Review call-outs ---------------------------------------------------
+/**
+ * Which half of the couple, by settings slot: `p1` is `brideName`, `p2` is
+ * `groomName`. Stored as a slot rather than a name so renaming a partner in
+ * Settings doesn't orphan every call-out addressed to them.
+ */
+export type PartnerId = 'p1' | 'p2';
+
+export type ReviewStatus = 'open' | 'done';
+
+/** What a call-out points at. `none` is a note with no record behind it. */
+export type ReviewTargetKind = 'none' | 'checklist' | 'vendor';
+
+/** Enough to reopen the record the call-out is about. */
+export interface ReviewTarget {
+  kind: ReviewTargetKind;
+  /**
+   * Ids the owning tab needs: `{ phase, itemId }` for a checklist task,
+   * `{ vendorId }` for a vendor category. Empty when `kind` is `none`.
+   */
+  ref: Record<string, string>;
+}
+
+/**
+ * One partner asking the other to go look at something. The pair plan in
+ * parallel, so this is the hand-off: it names the record, says what to look
+ * at, and stays open until the other person marks it reviewed.
+ */
+export interface ReviewRequest {
+  id: string;
+  /** Partner being asked to look. */
+  to: PartnerId;
+  /** Partner who asked. */
+  from: PartnerId;
+  /** Headline — usually the record's own name. */
+  title: string;
+  /** What you want them to look at or decide. */
+  ask: string;
+  /** Reference link, for a call-out not tied to a record. */
+  url: string;
+  target: ReviewTarget;
+  status: ReviewStatus;
+  /** What they said when they marked it reviewed. */
+  reply: string;
+  /** Epoch ms. `resolvedAt` is 0 while still open. */
+  createdAt: number;
+  resolvedAt: number;
+}
+
 export interface SeatingTable {
   id: string;
   name: string;
@@ -466,6 +515,8 @@ export interface AppState {
   checklist: Record<string, boolean>;
   checklistItems: Record<string, ChecklistItem[]>;
   vendors: Vendor[];
+  /** Open (and answered) "go look at this" hand-offs between the couple. */
+  reviewRequests: ReviewRequest[];
   seating: SeatingTable[];
   runOfShow: RunOfShowItem[];
   weekend: WeekendEvent[];

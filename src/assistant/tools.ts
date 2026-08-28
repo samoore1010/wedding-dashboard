@@ -6,6 +6,15 @@
 
 import { useStore } from '../store';
 import { mergeContacts, toContacts } from '../guests/contacts';
+import {
+  PARTNER_IDS,
+  checklistTarget,
+  noTarget,
+  otherPartner,
+  partnerName,
+  targetLabel,
+  vendorTarget,
+} from '../reviews';
 import { uid } from '../utils';
 import {
   attendeeGuestMemberId,
@@ -21,6 +30,7 @@ import {
 } from '../bachParty';
 import type {
   ChecklistLink,
+  PartnerId,
   GuestSide,
   GuestGroup,
   GuestStatus,
@@ -136,6 +146,7 @@ export const TOOLS: AssistantTool[] = [
           'seating',
           'venue',
           'checklist',
+          'reviews',
           'registry',
           'gifts',
           'honeymoon',
@@ -1355,6 +1366,78 @@ export const TOOLS: AssistantTool[] = [
     },
   },
 
+  // ---------------------------------------------------------------- reviews
+  {
+    name: 'request_review',
+    kind: 'write',
+    description:
+      'Hand something to the other partner to look at — it appears on their overview as a call-out ' +
+      'and stays there until they mark it reviewed. Point it at a checklist task or a vendor category ' +
+      'when there is one, otherwise leave both ids out and give it a title (and link) of its own.',
+    input_schema: obj(
+      {
+        to: enumStr(PARTNER_IDS, 'Which partner should look — see get_dashboard section "reviews" for names'),
+        from: enumStr(PARTNER_IDS, 'Which partner is asking. Defaults to the other one.'),
+        ask: str('What you want them to look at or decide'),
+        title: str('Headline. Defaults to the name of the task/vendor when one is given.'),
+        checklist_item_id: str('Checklist item this is about'),
+        vendor_id: str('Vendor category this is about'),
+        url: str('Reference link, for a call-out not tied to an entry'),
+      },
+      ['to', 'ask']
+    ),
+    summarize: (i) =>
+      `Ask ${reviewPartnerName(i.to)} to review "${
+        i.title || (i.checklist_item_id ? checkItemLabel(i.checklist_item_id) : '') ||
+        (i.vendor_id ? label('vendors', i.vendor_id, 'type') : '') || 'this'
+      }"`,
+    run: (i) => {
+      const to = i.to as PartnerId;
+      let target = noTarget();
+      let title = String(i.title ?? '').trim();
+      if (i.checklist_item_id) {
+        target = checklistTarget(phaseOf(i.checklist_item_id), i.checklist_item_id);
+        title = title || checkItemLabel(i.checklist_item_id);
+      } else if (i.vendor_id) {
+        requireEntity('vendors', i.vendor_id);
+        target = vendorTarget(i.vendor_id);
+        title = title || label('vendors', i.vendor_id, 'type');
+      }
+      if (!title) throw new Error('Give the call-out a title, or point it at a checklist item / vendor.');
+      S().addReviewRequest({
+        to,
+        from: (i.from as PartnerId) || otherPartner(to),
+        title,
+        ask: String(i.ask ?? '').trim(),
+        url: String(i.url ?? '').trim(),
+        target,
+      });
+      return `Asked ${reviewPartnerName(to)} to review "${title}".`;
+    },
+  },
+  {
+    name: 'resolve_review',
+    kind: 'write',
+    description: 'Mark a review call-out as reviewed (optionally with a reply), or reopen it.',
+    input_schema: obj(
+      {
+        id: str('Call-out id (from get_dashboard section "reviews")'),
+        done: bool('True to mark reviewed, false to reopen'),
+        reply: str('What the reviewer wants to say back'),
+      },
+      ['id', 'done']
+    ),
+    summarize: (i) =>
+      `Mark call-out "${reviewLabel(i.id)}" ${i.done ? 'reviewed' : 'open again'}`,
+    run: (i) => {
+      if (!S().reviewRequests.some((r) => r.id === i.id)) {
+        throw new Error(`No review call-out with id "${i.id}". Call get_dashboard section "reviews".`);
+      }
+      S().resolveReview(i.id, !!i.done, i.reply === undefined ? undefined : String(i.reply));
+      return `Marked "${reviewLabel(i.id)}" ${i.done ? 'reviewed' : 'open again'}.`;
+    },
+  },
+
   // ---------------------------------------------------------------- registry
   {
     name: 'add_registry_category',
@@ -1612,6 +1695,13 @@ function checkItemLabel(itemId: string): string {
     if (hit) return hit.text;
   }
   return itemId;
+}
+
+const reviewPartnerName = (p: string): string =>
+  partnerName(S().settings, (p === 'p1' ? 'p1' : 'p2') as PartnerId);
+
+function reviewLabel(id: string): string {
+  return S().reviewRequests.find((r) => r.id === id)?.title ?? id;
 }
 
 /** Normalise assistant-supplied links, giving each one an id. */
@@ -1972,6 +2062,23 @@ function readSection(section: string): unknown {
           })),
         })),
       };
+    case 'reviews':
+      return {
+        partners: { p1: partnerName(s.settings, 'p1'), p2: partnerName(s.settings, 'p2') },
+        callOuts: s.reviewRequests.map((r) => ({
+          id: r.id,
+          to: r.to,
+          from: r.from,
+          title: r.title,
+          ask: r.ask,
+          url: r.url,
+          status: r.status,
+          reply: r.reply,
+          about: targetLabel(r.target) || 'Free-standing note',
+          checklistItemId: r.target.kind === 'checklist' ? r.target.ref.itemId : undefined,
+          vendorId: r.target.kind === 'vendor' ? r.target.ref.vendorId : undefined,
+        })),
+      };
     case 'registry':
       return {
         categories: Object.entries(s.registryCats).map(([cat, items]) => ({
@@ -2018,6 +2125,11 @@ function readSection(section: string): unknown {
           categories: s.budgetCats.length,
         },
         vendors: { total: s.vendors.length, booked: s.vendors.filter((v) => v.stage === 'Booked' || v.stage === 'Paid in Full').length },
+        reviews: {
+          open: s.reviewRequests.filter((r) => r.status === 'open').length,
+          waitingOnP1: s.reviewRequests.filter((r) => r.status === 'open' && r.to === 'p1').length,
+          waitingOnP2: s.reviewRequests.filter((r) => r.status === 'open' && r.to === 'p2').length,
+        },
         seating: { tables: s.seating.length },
         weddingParty: { members: s.weddingParty.members.length, groups: s.weddingParty.groups.length },
         bachParty: (() => {
@@ -2035,7 +2147,7 @@ function readSection(section: string): unknown {
           };
         })(),
         venue: { name: s.venuePlan.venueName || s.settings.venueName, sections: s.venuePlan.sections.length },
-        sections: ['guests', 'party', 'bach', 'budget', 'vendors', 'seating', 'venue', 'checklist', 'registry', 'gifts', 'honeymoon', 'timeline', 'settings'],
+        sections: ['guests', 'party', 'bach', 'budget', 'vendors', 'seating', 'venue', 'checklist', 'reviews', 'registry', 'gifts', 'honeymoon', 'timeline', 'settings'],
       };
     }
   }
