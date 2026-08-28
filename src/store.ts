@@ -21,6 +21,10 @@ import type {
   VenueSection,
   PartyGroup,
   PartyMember,
+  BachParty,
+  BachAttendee,
+  BachCostLine,
+  BachDestination,
   WeekendEvent,
   WeddingSettings,
   BudgetCategory,
@@ -34,6 +38,12 @@ import { makeReviewRequest, sameTarget } from './reviews';
 import { defaultVenuePlan, makeVenueField, makeVenueHotel, makeVenueSection } from './venuePlan';
 import { headlineFrom, makeVendorCandidate, makeVendorPin } from './vendors';
 import { defaultWeddingParty, makePartyGroup, makePartyMember } from './weddingParty';
+import {
+  defaultBachParty,
+  makeBachAttendee,
+  makeBachCostLine,
+  makeBachDestination,
+} from './bachParty';
 import { uid } from './utils';
 import { cleanContacts, toContacts } from './guests/contacts';
 
@@ -78,6 +88,7 @@ const UNDO_DATA_KEYS = [
   'venues',
   'venuePlan',
   'weddingParty',
+  'bachParty',
   'honeymoonDays',
   'notes',
   'honeymoonNotes',
@@ -226,6 +237,20 @@ interface Actions {
   removePartyMember: (id: string) => void;
   /** Move a member to a group, optionally before another member (for ordering). */
   movePartyMember: (id: string, toGroupId: string, beforeId?: string | null) => void;
+
+  // Bach party
+  updateBachParty: (patch: Partial<Omit<BachParty, 'destinations' | 'attendees'>>) => void;
+  addBachDestination: (dest?: Partial<BachDestination>) => string;
+  updateBachDestination: (id: string, patch: Partial<BachDestination>) => void;
+  removeBachDestination: (id: string) => void;
+  /** Book a destination (or pass '' to un-book). Marks it Booked. */
+  chooseBachDestination: (id: string) => void;
+  addBachCostLine: (destId: string, line?: Partial<BachCostLine>) => string;
+  updateBachCostLine: (destId: string, lineId: string, patch: Partial<BachCostLine>) => void;
+  removeBachCostLine: (destId: string, lineId: string) => void;
+  addBachAttendee: (attendee?: Partial<BachAttendee>) => string;
+  updateBachAttendee: (id: string, patch: Partial<BachAttendee>) => void;
+  removeBachAttendee: (id: string) => void;
 
   // Honeymoon
   addHDay: () => void;
@@ -1020,6 +1045,109 @@ export const useStore = create<AppState & Actions & UndoState>()(
           return { weddingParty: { ...s.weddingParty, members } };
         }),
 
+      // ---- Bach party ---------------------------------------------------
+      // Location ideas each carry their own cost lines; the per-person price is
+      // always derived from those plus the roster (see bachParty.ts), never stored.
+      updateBachParty: (patch) => set((s) => ({ bachParty: { ...s.bachParty, ...patch } })),
+
+      addBachDestination: (dest) => {
+        const d = makeBachDestination(dest);
+        set((s) => ({
+          bachParty: { ...s.bachParty, destinations: [...s.bachParty.destinations, d] },
+        }));
+        return d.id;
+      },
+      updateBachDestination: (id, patch) =>
+        set((s) => ({
+          bachParty: {
+            ...s.bachParty,
+            destinations: s.bachParty.destinations.map((d) =>
+              d.id === id ? { ...d, ...patch } : d
+            ),
+          },
+        })),
+      removeBachDestination: (id) =>
+        set((s) => ({
+          bachParty: {
+            ...s.bachParty,
+            chosenId: s.bachParty.chosenId === id ? '' : s.bachParty.chosenId,
+            destinations: s.bachParty.destinations.filter((d) => d.id !== id),
+          },
+        })),
+      chooseBachDestination: (id) =>
+        set((s) => ({
+          bachParty: {
+            ...s.bachParty,
+            chosenId: id,
+            // Booking one settles the others: they become options that lost.
+            destinations: s.bachParty.destinations.map((d) =>
+              d.id === id
+                ? { ...d, status: 'Booked' }
+                : d.status === 'Booked'
+                ? { ...d, status: 'Shortlist' }
+                : d
+            ),
+          },
+        })),
+
+      addBachCostLine: (destId, line) => {
+        const l = makeBachCostLine(line);
+        set((s) => ({
+          bachParty: {
+            ...s.bachParty,
+            destinations: s.bachParty.destinations.map((d) =>
+              d.id === destId ? { ...d, costs: [...d.costs, l] } : d
+            ),
+          },
+        }));
+        return l.id;
+      },
+      updateBachCostLine: (destId, lineId, patch) =>
+        set((s) => ({
+          bachParty: {
+            ...s.bachParty,
+            destinations: s.bachParty.destinations.map((d) =>
+              d.id === destId
+                ? {
+                    ...d,
+                    costs: d.costs.map((l) => (l.id === lineId ? { ...l, ...patch } : l)),
+                  }
+                : d
+            ),
+          },
+        })),
+      removeBachCostLine: (destId, lineId) =>
+        set((s) => ({
+          bachParty: {
+            ...s.bachParty,
+            destinations: s.bachParty.destinations.map((d) =>
+              d.id === destId ? { ...d, costs: d.costs.filter((l) => l.id !== lineId) } : d
+            ),
+          },
+        })),
+
+      addBachAttendee: (attendee) => {
+        const a = makeBachAttendee(attendee);
+        set((s) => ({
+          bachParty: { ...s.bachParty, attendees: [...s.bachParty.attendees, a] },
+        }));
+        return a.id;
+      },
+      updateBachAttendee: (id, patch) =>
+        set((s) => ({
+          bachParty: {
+            ...s.bachParty,
+            attendees: s.bachParty.attendees.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+          },
+        })),
+      removeBachAttendee: (id) =>
+        set((s) => ({
+          bachParty: {
+            ...s.bachParty,
+            attendees: s.bachParty.attendees.filter((a) => a.id !== id),
+          },
+        })),
+
       addHDay: () =>
         set((s) => ({
           honeymoonDays: [
@@ -1071,7 +1199,7 @@ export const useStore = create<AppState & Actions & UndoState>()(
     }),
     {
       name: 'wedding-dashboard-v1',
-      version: 13,
+      version: 14,
       // Undo history is session-only — never sync it to the server/localStorage.
       partialize: (s) => {
         const { undoStack: _u, ...rest } = s as any;
@@ -1240,6 +1368,10 @@ export const useStore = create<AppState & Actions & UndoState>()(
         // v13: the couple can hand items to each other to review.
         if (version < 13) {
           persisted.reviewRequests = persisted.reviewRequests ?? [];
+        }
+        // v14: the bach party got its own tab. Seed it, titled from the groom.
+        if (version < 14 && !persisted.bachParty) {
+          persisted.bachParty = defaultBachParty(persisted.settings);
         }
         return persisted;
       },

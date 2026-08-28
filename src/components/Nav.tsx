@@ -4,6 +4,7 @@ import {
   Wallet,
   Users,
   Crown,
+  PartyPopper,
   Building2,
   CheckSquare,
   Briefcase,
@@ -32,6 +33,7 @@ const TABS: { id: TabId; label: string; icon: any }[] = [
   { id: 'budget', label: 'Budget', icon: Wallet },
   { id: 'guests', label: 'Guests', icon: Users },
   { id: 'weddingparty', label: 'Wedding Party', icon: Crown },
+  { id: 'bachparty', label: 'Bach Party', icon: PartyPopper },
   { id: 'venues', label: 'Venue', icon: Building2 },
   { id: 'moodboard', label: 'Mood Board', icon: ImageIcon },
   { id: 'checklist', label: 'Checklist', icon: CheckSquare },
@@ -45,11 +47,24 @@ const TABS: { id: TabId; label: string; icon: any }[] = [
 
 export function Nav({ active, onChange, mobileOpen, onMobileClose }: NavProps) {
   const viewer = useViewer((s) => s.viewer);
-  const { households, party, vendors, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard, reviewRequests } =
+  const {
+    households,
+    party,
+    bach,
+    vendors,
+    checklistItems,
+    checklist,
+    registryCats,
+    registryChecked,
+    gifts,
+    moodBoard,
+    reviewRequests,
+  } =
     useShallowStore((s) => ({
       reviewRequests: s.reviewRequests,
       households: s.households,
       party: s.weddingParty,
+      bach: s.bachParty,
       vendors: s.vendors,
       checklistItems: s.checklistItems,
       checklist: s.checklist,
@@ -84,13 +99,28 @@ export function Nav({ active, onChange, mobileOpen, onMobileClose }: NavProps) {
       overview: myReviews || null,
       guests: guestCount || null,
       weddingparty: party.members.length || null,
+      // Who's actually coming, since that's the number the trip hinges on.
+      bachparty: bach.attendees.filter((a) => a.rsvp === 'In').length || null,
       moodboard: moodBoard.length || null,
       checklist: totalChecks ? `${pct(doneChecks, totalChecks)}%` : null,
       vendors: vendors.length ? `${booked}/${vendors.length}` : null,
       registry: totalReg ? `${purchasedReg}/${totalReg}` : null,
       gifts: giftsToThank > 0 ? giftsToThank : null,
     } as Record<string, string | number | null>;
-  }, [households, party, vendors, checklistItems, checklist, registryCats, registryChecked, gifts, moodBoard, reviewRequests, viewer]);
+  }, [
+    households,
+    party,
+    bach,
+    vendors,
+    checklistItems,
+    checklist,
+    registryCats,
+    registryChecked,
+    gifts,
+    moodBoard,
+    reviewRequests,
+    viewer,
+  ]);
 
   // close mobile drawer when tab changes via Escape
   useEffect(() => {

@@ -16,6 +16,18 @@ import {
   vendorTarget,
 } from '../reviews';
 import { uid } from '../utils';
+import {
+  attendeeGuestMemberId,
+  attendeeName,
+  attendeeShare,
+  costBreakdown,
+  countsFor,
+  headlineDestination,
+  isCounted,
+  rosterCounts,
+  rosterMoney,
+  type BachLinkCtx,
+} from '../bachParty';
 import type {
   ChecklistLink,
   PartnerId,
@@ -27,6 +39,10 @@ import type {
   SeatingTable,
   Audience,
   VenueSection,
+  BachAttendee,
+  BachDestStatus,
+  BachRsvp,
+  BachSplit,
 } from '../types';
 
 export type ToolKind = 'read' | 'write';
@@ -92,6 +108,9 @@ const VENDOR_STAGES: VendorStage[] = [
   'Paid in Full',
 ];
 const TABLE_TYPES: SeatingTable['type'][] = ['regular', 'kings', 'sweetheart'];
+const BACH_RSVP_VALUES: BachRsvp[] = ['Invited', 'In', 'Maybe', 'Out'];
+const BACH_STATUSES: BachDestStatus[] = ['Idea', 'Shortlist', 'Booked', 'Passed'];
+const BACH_SPLITS: BachSplit[] = ['total', 'perPerson'];
 
 const memberSchema = obj(
   {
@@ -121,6 +140,7 @@ export const TOOLS: AssistantTool[] = [
           'overview',
           'guests',
           'party',
+          'bach',
           'budget',
           'vendors',
           'seating',
@@ -1004,6 +1024,268 @@ export const TOOLS: AssistantTool[] = [
     },
   },
 
+  // ---------------------------------------------------------------- bach party
+  // A trip with location ideas (each carrying its own cost lines) and a roster.
+  // The per-person price is always derived from the cost lines plus the
+  // headcount — never set it directly. Call get_dashboard("bach") for ids.
+  {
+    name: 'bach_update',
+    kind: 'write',
+    description:
+      "Update the bach party's title, who it's for, dates, notes, or whether Maybes count toward the headcount.",
+    input_schema: obj({
+      title: str('Trip name, e.g. "Steve\'s Bach Party"'),
+      honoreeName: str('Who the trip is for'),
+      dates: str('Free text — the dates usually follow the destination'),
+      countMaybes: bool('Count Maybe RSVPs in the headcount when pricing'),
+      notes: str(),
+    }),
+    summarize: () => 'Update the bach party details',
+    run: (i) => {
+      S().updateBachParty(clean(i));
+      return 'Updated the bach party.';
+    },
+  },
+  {
+    name: 'bach_add_destination',
+    kind: 'write',
+    description:
+      'Add a location idea for the bach party. Add its costs separately with bach_add_cost. ' +
+      'Set headcountEstimate to price it before the roster is firm.',
+    input_schema: obj(
+      {
+        name: str('Place, e.g. "Nashville"'),
+        location: str('City / state, or the neighborhood'),
+        status: enumStr(BACH_STATUSES, 'Default Idea'),
+        dates: str('e.g. "Apr 17-19"'),
+        nights: str('Number of nights'),
+        travel: str('How you get there, e.g. "3.5 hr drive"'),
+        lodging: str('Where you would stay'),
+        headcountEstimate: num('Price it as if this many people go; omit to use the live roster'),
+        pros: str(),
+        cons: str(),
+        notes: str(),
+      },
+      ['name']
+    ),
+    summarize: (i) => `Add bach party idea "${i.name}"`,
+    run: (i) => {
+      S().addBachDestination(clean(i));
+      return `Added "${i.name}" as a bach party location idea.`;
+    },
+  },
+  {
+    name: 'bach_update_destination',
+    kind: 'write',
+    description: 'Update a bach party location idea. Use bach_book_destination to mark one as chosen.',
+    input_schema: obj(
+      {
+        destId: str('Destination id from get_dashboard("bach")'),
+        name: str(),
+        location: str(),
+        status: enumStr(BACH_STATUSES),
+        dates: str(),
+        nights: str(),
+        travel: str(),
+        lodging: str(),
+        headcountEstimate: num('0 means price it from the live roster'),
+        pros: str(),
+        cons: str(),
+        notes: str(),
+      },
+      ['destId']
+    ),
+    summarize: (i) => `Update bach party idea ${bachDestLabel(i.destId)}`,
+    run: (i) => {
+      const { destId, ...patch } = i;
+      bachDest(destId);
+      S().updateBachDestination(destId, clean(patch));
+      return `Updated ${bachDestLabel(destId)}.`;
+    },
+  },
+  {
+    name: 'bach_remove_destination',
+    kind: 'write',
+    description: 'Delete a bach party location idea and its costs.',
+    input_schema: obj({ destId: str() }, ['destId']),
+    summarize: (i) => `Delete bach party idea ${bachDestLabel(i.destId)}`,
+    run: (i) => {
+      const label = bachDestLabel(i.destId);
+      bachDest(i.destId);
+      S().removeBachDestination(i.destId);
+      return `Removed ${label}.`;
+    },
+  },
+  {
+    name: 'bach_book_destination',
+    kind: 'write',
+    description: 'Book a bach party location — marks it Booked and makes it the headline option.',
+    input_schema: obj({ destId: str() }, ['destId']),
+    summarize: (i) => `Book ${bachDestLabel(i.destId)} for the bach party`,
+    run: (i) => {
+      bachDest(i.destId);
+      S().chooseBachDestination(i.destId);
+      return `Booked ${bachDestLabel(i.destId)}.`;
+    },
+  },
+  {
+    name: 'bach_add_cost',
+    kind: 'write',
+    description:
+      'Add a cost line to a bach party location, which is how the per-person price gets calculated. ' +
+      'split "total" is one bill for the group (a house rental) and is divided by the headcount; ' +
+      'split "perPerson" is already a per-head price (a plane ticket). ' +
+      'Set coversHonoree when the group picks up the honoree\'s share of that line.',
+    input_schema: obj(
+      {
+        destId: str('Destination id'),
+        label: str('e.g. "Airbnb", "Flights", "Golf"'),
+        amount: num('The amount, read according to `split`'),
+        split: enumStr(BACH_SPLITS, 'total = one group bill, perPerson = a per-head price'),
+        coversHonoree: bool("Group splits the honoree's share of this line"),
+        notes: str(),
+      },
+      ['destId', 'label', 'amount', 'split']
+    ),
+    summarize: (i) =>
+      `Add ${i.label} (${i.amount} ${i.split === 'total' ? 'total' : 'each'}) to ${bachDestLabel(i.destId)}`,
+    run: (i) => {
+      const { destId, ...line } = i;
+      bachDest(destId);
+      S().addBachCostLine(destId, clean(line));
+      return `Added "${i.label}" to ${bachDestLabel(destId)}. ${bachPriceLine(destId)}`;
+    },
+  },
+  {
+    name: 'bach_update_cost',
+    kind: 'write',
+    description: 'Update or remove a cost line on a bach party location. Pass remove: true to delete it.',
+    input_schema: obj(
+      {
+        destId: str(),
+        lineId: str('Cost line id from get_dashboard("bach")'),
+        label: str(),
+        amount: num(),
+        split: enumStr(BACH_SPLITS),
+        coversHonoree: bool(),
+        notes: str(),
+        remove: bool('Delete this cost line'),
+      },
+      ['destId', 'lineId']
+    ),
+    summarize: (i) =>
+      `${i.remove ? 'Remove' : 'Update'} a cost on ${bachDestLabel(i.destId)}`,
+    run: (i) => {
+      const { destId, lineId, remove, ...patch } = i;
+      const dest = bachDest(destId);
+      const line = dest.costs.find((l) => l.id === lineId);
+      if (!line) throw new Error(`No cost line "${lineId}" on ${bachDestLabel(destId)}.`);
+      if (remove) {
+        S().removeBachCostLine(destId, lineId);
+        return `Removed "${line.label}". ${bachPriceLine(destId)}`;
+      }
+      S().updateBachCostLine(destId, lineId, clean(patch));
+      return `Updated "${line.label}". ${bachPriceLine(destId)}`;
+    },
+  },
+  {
+    name: 'bach_add_attendee',
+    kind: 'write',
+    description:
+      'Add someone to the bach party roster. Link a wedding-party member with partyMemberId, ' +
+      'a guest with householdId + memberId, or just pass a name for someone on neither list — ' +
+      "plenty of people on these trips aren't groomsmen or wedding guests. " +
+      '`tag` is freeform ("Groomsman", "College friend", "Brother").',
+    input_schema: obj(
+      {
+        name: str('Required unless linking an existing person'),
+        partyMemberId: str('Wedding-party member id to link'),
+        householdId: str('Guest household id to link'),
+        memberId: str('Guest member id to link'),
+        tag: str('Freeform grouping label'),
+        rsvp: enumStr(BACH_RSVP_VALUES, 'Default Invited'),
+        contact: str('Phone / email; leave blank to use their linked details'),
+        isHonoree: bool('The person the trip is for — counted, but owes nothing'),
+        notes: str(),
+      },
+      []
+    ),
+    summarize: (i) =>
+      `Add ${i.name || guestMemberName(i.householdId, i.memberId) || bachPartyMemberName(i.partyMemberId) || 'someone'} to the bach party`,
+    run: (i) => {
+      const linkKind: BachAttendee['linkKind'] = i.partyMemberId
+        ? 'party'
+        : i.memberId
+        ? 'guest'
+        : 'none';
+      if (linkKind === 'party' && !S().weddingParty.members.some((m) => m.id === i.partyMemberId))
+        throw new Error(`No wedding-party member "${i.partyMemberId}". Call get_dashboard("party").`);
+      const name =
+        i.name ||
+        (linkKind === 'party'
+          ? bachPartyMemberName(i.partyMemberId)
+          : guestMemberName(i.householdId, i.memberId));
+      if (!name)
+        throw new Error('Provide a name, or a valid partyMemberId / householdId + memberId.');
+      S().addBachAttendee({
+        ...clean(i),
+        name,
+        linkKind,
+        partyMemberId: i.partyMemberId || '',
+        householdId: i.householdId || '',
+        memberId: i.memberId || '',
+      });
+      return `Added ${name} to the bach party roster.`;
+    },
+  },
+  {
+    name: 'bach_update_attendee',
+    kind: 'write',
+    description:
+      "Update someone on the bach party roster — their RSVP, tag, contact, what they've paid, " +
+      'a custom share that replaces the group rate, or whether they are the honoree.',
+    input_schema: obj(
+      {
+        id: str('Attendee id from get_dashboard("bach")'),
+        name: str('Only used for someone not linked to a list'),
+        rsvp: enumStr(BACH_RSVP_VALUES),
+        tag: str(),
+        contact: str(),
+        paid: num('Total handed over so far'),
+        shareOverride: num('Replaces the computed per-person share; pass -1 to clear it'),
+        isHonoree: bool(),
+        notes: str(),
+      },
+      ['id']
+    ),
+    summarize: (i) => `Update ${bachAttendeeLabel(i.id)} on the bach party roster`,
+    run: (i) => {
+      const { id, ...patch } = i;
+      if (!S().bachParty.attendees.some((a) => a.id === id))
+        throw new Error(`No bach party attendee "${id}". Call get_dashboard("bach").`);
+      const next: Record<string, unknown> = clean(patch);
+      // -1 is the escape hatch for "back to the group rate", since a JSON
+      // schema number can't carry null.
+      if (next.shareOverride != null && Number(next.shareOverride) < 0) next.shareOverride = null;
+      S().updateBachAttendee(id, next as Partial<BachAttendee>);
+      return `Updated ${bachAttendeeLabel(id)}.`;
+    },
+  },
+  {
+    name: 'bach_remove_attendee',
+    kind: 'write',
+    description: 'Take someone off the bach party roster. They stay on the guest list and in the wedding party.',
+    input_schema: obj({ id: str() }, ['id']),
+    summarize: (i) => `Remove ${bachAttendeeLabel(i.id)} from the bach party`,
+    run: (i) => {
+      const label = bachAttendeeLabel(i.id);
+      if (!S().bachParty.attendees.some((a) => a.id === i.id))
+        throw new Error(`No bach party attendee "${i.id}".`);
+      S().removeBachAttendee(i.id);
+      return `Removed ${label} from the bach party roster.`;
+    },
+  },
+
   // ---------------------------------------------------------------- checklist
   {
     name: 'add_checklist_item',
@@ -1521,6 +1803,46 @@ function partyMemberLabel(id: string): string {
   return m ? `"${partyMemberName(m) || 'unnamed'}"` : `"${id}"`;
 }
 
+// ---- bach party helpers -------------------------------------------------
+
+const bachCtx = (): BachLinkCtx => ({ households: S().households, party: S().weddingParty });
+
+function bachDest(destId: string) {
+  const d = S().bachParty.destinations.find((x) => x.id === destId);
+  if (!d) throw new Error(`No bach party destination "${destId}". Call get_dashboard("bach").`);
+  return d;
+}
+
+function bachDestLabel(destId: string): string {
+  const d = S().bachParty.destinations.find((x) => x.id === destId);
+  return d ? `"${d.name || 'untitled idea'}"` : `"${destId}"`;
+}
+
+function bachPartyMemberName(partyMemberId?: string): string {
+  if (!partyMemberId) return '';
+  const pm = S().weddingParty.members.find((m) => m.id === partyMemberId);
+  return pm ? partyMemberName(pm) : '';
+}
+
+function bachAttendeeLabel(id: string): string {
+  const a = S().bachParty.attendees.find((x) => x.id === id);
+  return a ? `"${attendeeName(a, bachCtx()) || 'unnamed'}"` : `"${id}"`;
+}
+
+/** Live counts for the roster, honouring the count-Maybes setting. */
+const bachRoster = () => rosterCounts(S().bachParty.attendees, S().bachParty.countMaybes);
+
+/** A one-line price recap, so the model can report the effect of a cost change. */
+function bachPriceLine(destId: string): string {
+  const d = S().bachParty.destinations.find((x) => x.id === destId);
+  if (!d) return '';
+  const b = costBreakdown(d, countsFor(d, bachRoster()));
+  const currency = S().settings.currency;
+  return `Now ${currency}${Math.round(b.perPerson)} per person (${currency}${Math.round(
+    b.tripTotal
+  )} total for ${b.headcount}${b.estimated ? ' estimated' : ''}).`;
+}
+
 // ---- dashboard reads ----------------------------------------------------
 
 function readSection(section: string): unknown {
@@ -1623,6 +1945,91 @@ function readSection(section: string): unknown {
           thankYou: m.thankYou,
         })),
       };
+    case 'bach': {
+      const bach = s.bachParty;
+      const ctx: BachLinkCtx = { households: s.households, party: s.weddingParty };
+      const roster = rosterCounts(bach.attendees, bach.countMaybes);
+      const headline = headlineDestination(bach, roster);
+      const perPerson = headline
+        ? costBreakdown(headline, countsFor(headline, roster)).perPerson
+        : 0;
+      const money = rosterMoney(bach.attendees, perPerson, bach.countMaybes);
+      return {
+        title: bach.title,
+        honoreeName: bach.honoreeName,
+        dates: bach.dates,
+        notes: bach.notes,
+        countMaybes: bach.countMaybes,
+        currency: s.settings.currency,
+        bookedDestinationId: bach.chosenId,
+        headcount: {
+          going: roster.headcount,
+          paying: roster.payingCount,
+          honorees: roster.honoreeCount,
+          maybe: bach.attendees.filter((a) => a.rsvp === 'Maybe').length,
+        },
+        money: {
+          perPerson: Math.round(perPerson),
+          owed: Math.round(money.owed),
+          collected: Math.round(money.collected),
+          outstanding: Math.round(money.outstanding),
+          basedOn: headline?.name ?? null,
+        },
+        destinations: bach.destinations.map((d) => {
+          const b = costBreakdown(d, countsFor(d, roster));
+          return {
+            id: d.id,
+            name: d.name,
+            location: d.location,
+            status: d.status,
+            dates: d.dates,
+            nights: d.nights,
+            travel: d.travel,
+            lodging: d.lodging,
+            pros: d.pros,
+            cons: d.cons,
+            notes: d.notes,
+            links: d.links,
+            headcountEstimate: d.headcountEstimate,
+            pricedFor: b.headcount,
+            pricedFromEstimate: b.estimated,
+            tripTotal: Math.round(b.tripTotal),
+            perPerson: Math.round(b.perPerson),
+            costs: b.lines.map(({ line, total, perPayer }) => ({
+              id: line.id,
+              label: line.label,
+              amount: line.amount,
+              split: line.split,
+              coversHonoree: line.coversHonoree,
+              notes: line.notes,
+              lineTotal: Math.round(total),
+              perPerson: Math.round(perPayer),
+            })),
+          };
+        }),
+        attendees: bach.attendees.map((a) => {
+          const counted = isCounted(a, bach.countMaybes);
+          const share = attendeeShare(a, perPerson, counted);
+          return {
+            id: a.id,
+            name: attendeeName(a, ctx),
+            linkedTo: a.linkKind,
+            partyMemberId: a.partyMemberId,
+            householdId: a.householdId,
+            memberId: attendeeGuestMemberId(a, ctx),
+            tag: a.tag,
+            rsvp: a.rsvp,
+            isHonoree: a.isHonoree,
+            countedInHeadcount: counted,
+            owes: Math.round(share),
+            paid: a.paid,
+            balance: Math.round(share - (Number(a.paid) || 0)),
+            hasCustomShare: a.shareOverride != null,
+            notes: a.notes,
+          };
+        }),
+      };
+    }
     case 'venue':
       return {
         venueName: s.venuePlan.venueName,
@@ -1725,8 +2132,22 @@ function readSection(section: string): unknown {
         },
         seating: { tables: s.seating.length },
         weddingParty: { members: s.weddingParty.members.length, groups: s.weddingParty.groups.length },
+        bachParty: (() => {
+          const roster = rosterCounts(s.bachParty.attendees, s.bachParty.countMaybes);
+          const headline = headlineDestination(s.bachParty, roster);
+          return {
+            title: s.bachParty.title,
+            going: roster.headcount,
+            invited: s.bachParty.attendees.length,
+            ideas: s.bachParty.destinations.length,
+            booked: s.bachParty.destinations.find((d) => d.id === s.bachParty.chosenId)?.name ?? null,
+            perPerson: headline
+              ? Math.round(costBreakdown(headline, countsFor(headline, roster)).perPerson)
+              : 0,
+          };
+        })(),
         venue: { name: s.venuePlan.venueName || s.settings.venueName, sections: s.venuePlan.sections.length },
-        sections: ['guests', 'party', 'budget', 'vendors', 'seating', 'venue', 'checklist', 'reviews', 'registry', 'gifts', 'honeymoon', 'timeline', 'settings'],
+        sections: ['guests', 'party', 'bach', 'budget', 'vendors', 'seating', 'venue', 'checklist', 'reviews', 'registry', 'gifts', 'honeymoon', 'timeline', 'settings'],
       };
     }
   }

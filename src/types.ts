@@ -385,6 +385,101 @@ export interface VenuePlan {
   sections: VenueSection[];
 }
 
+// ---- Bach party ---------------------------------------------------------
+/** Where someone stands on coming. */
+export type BachRsvp = 'Invited' | 'In' | 'Maybe' | 'Out';
+
+/**
+ * How a cost is divided. `total` is one bill for the group (a house rental)
+ * and gets divided by the headcount; `perPerson` is already a per-head price
+ * (a plane ticket) and is multiplied up for the trip total.
+ */
+export type BachSplit = 'total' | 'perPerson';
+
+/** One line of a destination's cost, so the per-person price is derived, not typed. */
+export interface BachCostLine {
+  id: string;
+  /** "Airbnb", "Flights", "Golf round"… */
+  label: string;
+  amount: number;
+  split: BachSplit;
+  /** The group eats the honoree's share of this line, splitting it among the payers. */
+  coversHonoree: boolean;
+  notes: string;
+}
+
+export type BachDestStatus = 'Idea' | 'Shortlist' | 'Booked' | 'Passed';
+
+/** A place being considered for the trip, with everything needed to compare it. */
+export interface BachDestination {
+  id: string;
+  /** "Nashville", "Scottsdale"… */
+  name: string;
+  location: string;
+  status: BachDestStatus;
+  /** Free text — dates are rarely firm while comparing ("Apr 17–19"). */
+  dates: string;
+  nights: string;
+  /** "3.5 hr drive" / "direct flight, 2 hr". */
+  travel: string;
+  /** Where you'd stay — name, or paste a listing URL. */
+  lodging: string;
+  links: ChecklistLink[];
+  costs: BachCostLine[];
+  /**
+   * Price this option as if N people were going, for before the roster is
+   * firm. 0 means use the live count of who's in.
+   */
+  headcountEstimate: number;
+  pros: string;
+  cons: string;
+  notes: string;
+}
+
+/**
+ * Someone coming on the trip. They may be a wedding-party member, any guest,
+ * or nobody on either list — a college roommate who isn't invited to the
+ * wedding still comes to the bach party.
+ */
+export interface BachAttendee {
+  id: string;
+  name: string;
+  /** Where the name and contact come from; 'none' means typed in here. */
+  linkKind: 'party' | 'guest' | 'none';
+  /** Set when linkKind is 'party'. */
+  partyMemberId: string;
+  /** Both set when linkKind is 'guest'. */
+  householdId: string;
+  memberId: string;
+  /** Freeform, so the roster isn't limited to groomsmen — "Brother", "Work". */
+  tag: string;
+  rsvp: BachRsvp;
+  contact: string;
+  /** Money handed over so far. */
+  paid: number;
+  /** Replaces the computed share for someone with a different arrangement. */
+  shareOverride: number | null;
+  /** The guy the trip is for: counted in the headcount, owes nothing. */
+  isHonoree: boolean;
+  notes: string;
+}
+
+/** The bach party hub: options to compare, who's coming, and what it costs each of them. */
+export interface BachParty {
+  /** Renamable — defaults from the groom's name. */
+  title: string;
+  honoreeName: string;
+  /** Free text, since the date usually follows the destination. */
+  dates: string;
+  /** Destination id that got booked, or '' while still deciding. */
+  chosenId: string;
+  /** Count Maybes in the headcount when pricing. */
+  countMaybes: boolean;
+  destinations: BachDestination[];
+  attendees: BachAttendee[];
+  notes: string;
+}
+
 export interface HoneymoonDay {
   id: string;
   day: number;
@@ -433,6 +528,8 @@ export interface AppState {
   /** The active venue planning hub + guest-guide source. */
   venuePlan: VenuePlan;
   weddingParty: WeddingParty;
+  /** Bach party planning: location ideas, the roster, and the per-person math. */
+  bachParty: BachParty;
   honeymoonDays: HoneymoonDay[];
   notes: string;
   honeymoonNotes: string;
@@ -447,6 +544,7 @@ export type TabId =
   | 'budget'
   | 'guests'
   | 'weddingparty'
+  | 'bachparty'
   | 'venues'
   | 'moodboard'
   | 'checklist'
